@@ -132,10 +132,12 @@ int do_esc_calibration(orb_advert_t *mavlink_log_pub)
 			break;
 		}
 
-		if (now > (timeout_start + 6_s)) {
+		if (now > (timeout_start + 16_s)) {
 			// Timeout, we continue since maybe the battery cannot be detected properly
 			// If we abort here and the ESCs are infact connected and started calibrating
 			// they will measure the disarmed value as the lower limit instead of the fixed 1000us
+			// 不考虑以上情况，修改为：检测不到电池也会报错
+			calibration_failed = true;
 			break;
 		}
 

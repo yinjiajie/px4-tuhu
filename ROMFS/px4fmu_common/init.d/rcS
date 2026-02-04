@@ -222,6 +222,8 @@ else
 				echo "ERROR [init] SD card not mounted - trying to load airframe from ROMFS"
 			fi
 		fi
+		# 在这里，强制把每次启动的机型编号设置为4轴8桨
+		param set SYS_AUTOSTART 12001
 		. ${R}$AUTOSTART_PATH
 	fi
 	unset AUTOSTART_PATH
