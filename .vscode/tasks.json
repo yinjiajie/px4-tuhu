@@ -4,6 +4,42 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "build fmu-v5 (Docker)",
+            "type": "shell",
+            "command": "docker run --rm -v \"${workspaceFolder}:/src\" -w /src px4io/px4-dev-nuttx-focal:2022-08-12 make px4_fmu-v5_default",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": ["$gcc"],
+            "group": "build"
+        },
+        {
+            "label": "build fmu-v5 (WSL)",
+            "type": "shell",
+            "command": "wsl bash -c \"export PATH=/opt/gcc-arm-none-eabi-9-2020-q2-update/bin:\\$PATH && cd \\\"$(wslpath -u '${workspaceFolder}')\\\" && make px4_fmu-v5_default\"",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": ["$gcc"],
+            "group": "build"
+        },
+        {
             "label": "build",
             "type": "shell",
             "command": "/bin/bash",
@@ -20,7 +56,7 @@
             },
             "problemMatcher": {
                 "base": "$gcc",
-                "fileLocation": ["relative", "${command:cmake.buildDirectory}"]
+                "fileLocation": ["relative", "${workspaceFolder}"]
             },
             "presentation":{
                 "echo": false,

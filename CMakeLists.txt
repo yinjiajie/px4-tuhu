@@ -119,18 +119,23 @@ execute_process(
 	WORKING_DIRECTORY ${PX4_SOURCE_DIR}
 	)
 
-# git describe to X.Y.Z version
+# git describe to X.Y.Z version (robust when tag is missing or only hash)
+# genAI_m48s_fcs_start
 string(REPLACE "." ";" VERSION_LIST ${PX4_GIT_TAG})
-
-# major version
-list(GET VERSION_LIST 0 PX4_VERSION_MAJOR)
-string(REPLACE "v" "" PX4_VERSION_MAJOR ${PX4_VERSION_MAJOR})
-# minor version
-list(GET VERSION_LIST 1 PX4_VERSION_MINOR)
-# patch version
-list(GET VERSION_LIST 2 PX4_VERSION_PATCH)
-string(REPLACE "-" ";" PX4_VERSION_PATCH ${PX4_VERSION_PATCH})
-list(GET PX4_VERSION_PATCH 0 PX4_VERSION_PATCH)
+list(LENGTH VERSION_LIST VERSION_LIST_LEN)
+if(VERSION_LIST_LEN LESS 3)
+	set(PX4_VERSION_MAJOR "1")
+	set(PX4_VERSION_MINOR "15")
+	set(PX4_VERSION_PATCH "0")
+else()
+	list(GET VERSION_LIST 0 PX4_VERSION_MAJOR)
+	string(REPLACE "v" "" PX4_VERSION_MAJOR ${PX4_VERSION_MAJOR})
+	list(GET VERSION_LIST 1 PX4_VERSION_MINOR)
+	list(GET VERSION_LIST 2 PX4_VERSION_PATCH)
+	string(REPLACE "-" ";" PX4_VERSION_PATCH ${PX4_VERSION_PATCH})
+	list(GET PX4_VERSION_PATCH 0 PX4_VERSION_PATCH)
+endif()
+# genAI_m48s_fcs_end
 
 # # Capture only the hash part after 'g'
 string(REGEX MATCH "g([a-f0-9]+)$" GIT_HASH "${PX4_GIT_TAG}")

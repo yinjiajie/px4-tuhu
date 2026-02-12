@@ -103,12 +103,14 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get -y --quiet --no-install-recommends i
 # Python3 dependencies
 echo
 echo "Installing PX4 Python3 dependencies"
+# Use long timeout (default 15s often fails for large packages like pandas on slow networks)
+PIP_INSTALL_EXTRA="--timeout 300"
 if [ -n "$VIRTUAL_ENV" ]; then
 	# virtual environments don't allow --user option
-	python -m pip install -r ${DIR}/requirements.txt
+	python -m pip install $PIP_INSTALL_EXTRA -r ${DIR}/requirements.txt  -i https://pypi.tuna.tsinghua.edu.cn/simple
 else
 	# older versions of Ubuntu require --user option
-	python3 -m pip install --user -r ${DIR}/requirements.txt
+	python3 -m pip install --user $PIP_INSTALL_EXTRA -r ${DIR}/requirements.txt  -i https://pypi.tuna.tsinghua.edu.cn/simple
 fi
 
 # NuttX toolchain (arm-none-eabi-gcc)

@@ -54,34 +54,39 @@ if validate:
     git_tag_test = re.sub(r'-dirty$', '', git_tag)
     # remove optional -<num_commits>-g<commit_hash> at the end (in case we are not on a tagged commit)
     git_tag_test = re.sub(r'-[0-9]+-g[0-9a-fA-F]+$', '', git_tag_test)
-    # now check the version format
-    m = re.match(r'v([0-9]+)\.([0-9]+)\.[0-9]+(((-dev)|(-alpha[0-9]+)|(-beta[0-9]+)|(-rc[0-9]+))|'\
-                 r'(-[0-9]+\.[0-9]+\.[0-9]+((-dev)|(-alpha[0-9]+)|(-beta[0-9]+)|([-]?rc[0-9]+))?))?$', git_tag_test)
-    if m:
-        # format matches, check the major and minor numbers
-        major = int(m.group(1))
-        minor = int(m.group(2))
-        if major < 1 or (major == 1 and minor < 9):
+    # skip validation when tag is only a commit hash (no version tag, e.g. shallow clone or dev build)
+    if not git_tag_test.startswith('v') or '.' not in git_tag_test:
+        if verbose:
+            print("git tag is commit hash or non-version, skipping format validation")
+    else:
+        # now check the version format
+        m = re.match(r'v([0-9]+)\.([0-9]+)\.[0-9]+(((-dev)|(-alpha[0-9]+)|(-beta[0-9]+)|(-rc[0-9]+))|'\
+                     r'(-[0-9]+\.[0-9]+\.[0-9]+((-dev)|(-alpha[0-9]+)|(-beta[0-9]+)|([-]?rc[0-9]+))?))?$', git_tag_test)
+        if m:
+            # format matches, check the major and minor numbers
+            major = int(m.group(1))
+            minor = int(m.group(2))
+            if major < 1 or (major == 1 and minor < 9):
+                print("")
+                print("Error: PX4 version too low, expected at least v1.9.0")
+                print("Check the git tag (current tag: '{:}')".format(git_tag_test))
+                print("")
+                sys.exit(1)
+        else:
             print("")
-            print("Error: PX4 version too low, expected at least v1.9.0")
-            print("Check the git tag (current tag: '{:}')".format(git_tag_test))
+            print("Error: the git tag '{:}' does not match the expected format.".format(git_tag_test))
+            print("")
+            print("The expected format is 'v<PX4 version>[-<custom version>]'")
+            print("  <PX4 version>: v<major>.<minor>.<patch>[-rc<rc>|-beta<beta>|-alpha<alpha>|-dev]")
+            print("  <custom version>: <major>.<minor>.<patch>[-rc<rc>|-beta<beta>|-alpha<alpha>|-dev]")
+            print("Examples:")
+            print("  v1.9.0-rc3 (preferred)")
+            print("  v1.9.0-beta1")
+            print("  v1.9.0-1.0.0")
+            print("  v1.9.0-1.0.0-alpha2")
+            print("See also https://docs.px4.io/main/en/dev_setup/building_px4.html#building-for-nuttx")
             print("")
             sys.exit(1)
-    else:
-        print("")
-        print("Error: the git tag '{:}' does not match the expected format.".format(git_tag_test))
-        print("")
-        print("The expected format is 'v<PX4 version>[-<custom version>]'")
-        print("  <PX4 version>: v<major>.<minor>.<patch>[-rc<rc>|-beta<beta>|-alpha<alpha>|-dev]")
-        print("  <custom version>: <major>.<minor>.<patch>[-rc<rc>|-beta<beta>|-alpha<alpha>|-dev]")
-        print("Examples:")
-        print("  v1.9.0-rc3 (preferred)")
-        print("  v1.9.0-beta1")
-        print("  v1.9.0-1.0.0")
-        print("  v1.9.0-1.0.0-alpha2")
-        print("See also https://docs.px4.io/main/en/dev_setup/building_px4.html#building-for-nuttx")
-        print("")
-        sys.exit(1)
 
 git_version = subprocess.check_output('git rev-parse --verify HEAD'.split(),
                                       stderr=subprocess.STDOUT).decode('utf-8').strip()
@@ -135,8 +140,12 @@ if (os.path.exists('src/modules/mavlink/mavlink/.git')):
 if (os.path.exists('platforms/nuttx/NuttX/nuttx/.git')):
     nuttx_git_tags = subprocess.check_output('git -c versionsort.suffix=- tag --sort=v:refname'.split(),
                                   cwd='platforms/nuttx/NuttX/nuttx', stderr=subprocess.STDOUT).decode('utf-8').strip()
-    nuttx_git_tag = re.findall(r'nuttx-[0-9]+\.[0-9]+\.[0-9]+', nuttx_git_tags)[-1].replace("nuttx-", "v")
-    nuttx_git_tag = re.sub('-.*', '.0', nuttx_git_tag)
+    nuttx_tag_list = re.findall(r'nuttx-[0-9]+\.[0-9]+\.[0-9]+', nuttx_git_tags)
+    if nuttx_tag_list:
+        nuttx_git_tag = nuttx_tag_list[-1].replace("nuttx-", "v")
+        nuttx_git_tag = re.sub('-.*', '.0', nuttx_git_tag)
+    else:
+        nuttx_git_tag = "v10.3.0"
     nuttx_git_version = subprocess.check_output('git rev-parse --verify HEAD'.split(),
                                       cwd='platforms/nuttx/NuttX/nuttx', stderr=subprocess.STDOUT).decode('utf-8').strip()
     nuttx_git_version_short = nuttx_git_version[0:16]

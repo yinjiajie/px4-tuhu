@@ -125,6 +125,19 @@
         },
         "search.showLineNumbers": true,
         "terminal.integrated.scrollback": 15000,
+        "terminal.integrated.defaultProfile.windows": "Command Prompt",
+        "terminal.integrated.profiles.windows": {
+                "PowerShell": {
+                        "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                        "args": ["-NoLogo"]
+                },
+                "Command Prompt": {
+                        "path": "C:\\Windows\\System32\\cmd.exe"
+                }
+        },
+        "terminal.integrated.windowsEnableConpty": false,
+        "terminal.integrated.gpuAcceleration": "off",
+        "terminal.integrated.shellIntegration.enabled": false,
         "yaml.schemas": {
                 "${workspaceFolder}/validation/module_schema.yaml": "${workspaceFolder}/src/modules/*/module.yaml"
         },

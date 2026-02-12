@@ -101,15 +101,21 @@ target_include_directories(uavcan_${UAVCAN_DRIVER}_driver PUBLIC
 )
 
 
-# generated DSDL
+# generated DSDL: use libdronecan/dsdl when libuavcan/dsdl (submodule) is not populated
+set(DSDL_LIBUAVCAN "${LIBUAVCAN_DIR}/dsdl")
+set(DSDL_LIBDRONECAN "${PX4_SOURCE_DIR}/src/drivers/uavcan/libdronecan/dsdl")
+if(EXISTS "${DSDL_LIBDRONECAN}/uavcan")
+	set(DSDL_BASE "${DSDL_LIBDRONECAN}")
+else()
+	set(DSDL_BASE "${DSDL_LIBUAVCAN}")
+endif()
 set(DSDLC_DIR "${PX4_SOURCE_DIR}/src/drivers/uavcan/dsdl")
-set(DSDLC_INPUTS
-	"${LIBUAVCAN_DIR}/dsdl/ardupilot"
-	"${LIBUAVCAN_DIR}/dsdl/com"
-	"${LIBUAVCAN_DIR}/dsdl/cuav"
-	"${LIBUAVCAN_DIR}/dsdl/dronecan"
-	"${LIBUAVCAN_DIR}/dsdl/uavcan"
-)
+set(DSDLC_INPUTS)
+foreach(_ns ardupilot com cuav dronecan uavcan)
+	if(EXISTS "${DSDL_BASE}/${_ns}")
+		list(APPEND DSDLC_INPUTS "${DSDL_BASE}/${_ns}")
+	endif()
+endforeach()
 set(DSDLC_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/include/dsdlc_generated")
 
 set(DSDLC_INPUT_FILES)
@@ -117,9 +123,11 @@ foreach(DSDLC_INPUT ${DSDLC_INPUTS})
 	file(GLOB_RECURSE DSDLC_NEW_INPUT_FILES ${CMAKE_CURRENT_SOURCE_DIR} "${DSDLC_INPUT}/*.uavcan")
 	list(APPEND DSDLC_INPUT_FILES ${DSDLC_NEW_INPUT_FILES})
 endforeach(DSDLC_INPUT)
+# dronecan Python package (pydronecan) required by libuavcan_dsdlc
+set(PYDRONECAN_DIR ${PX4_SOURCE_DIR}/src/drivers/uavcan/libdronecan/libuavcan/dsdl_compiler/pydronecan)
 add_custom_command(OUTPUT px4_uavcan_dsdlc_run.stamp
 	COMMAND
-		${PYTHON_EXECUTABLE} ${LIBUAVCAN_DIR}/libuavcan/dsdl_compiler/libuavcan_dsdlc
+		${CMAKE_COMMAND} -E env "PYTHONPATH=${PYDRONECAN_DIR}" ${PYTHON_EXECUTABLE} ${LIBUAVCAN_DIR}/libuavcan/dsdl_compiler/libuavcan_dsdlc
 			--outdir ${DSDLC_OUTPUT} ${DSDLC_INPUTS}
 			#--verbose
 	COMMAND ${CMAKE_COMMAND} -E touch px4_uavcan_dsdlc_run.stamp
