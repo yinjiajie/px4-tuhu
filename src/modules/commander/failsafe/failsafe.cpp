@@ -453,10 +453,11 @@ void Failsafe::checkStateAndMode(const hrt_abstime &time_us, const State &state,
 		CHECK_FAILSAFE(status_flags, mission_failure, Action::RTL);
 
 		// If manual control loss and GCS connection loss are disabled and we lose both command links and the mission finished,
-		// trigger RTL to avoid losing the vehicle
+		// trigger RTL to avoid losing the vehicle. Skip this once the vehicle is already landed.
 		if ((_param_com_rc_in_mode.get() == int32_t(RcInMode::StickInputDisabled) || rc_loss_ignored_mission)
 		    && _param_nav_dll_act.get() == int32_t(gcs_connection_loss_failsafe_mode::Disabled)
-		    && state.mission_finished) {
+		    && state.mission_finished
+		    && !state.landed) {
 			_last_state_mission_control_lost = checkFailsafe(_caller_id_mission_control_lost, _last_state_mission_control_lost,
 							   status_flags.gcs_connection_lost, Action::RTL);
 		}

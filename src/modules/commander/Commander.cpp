@@ -2302,6 +2302,7 @@ bool Commander::handleModeIntentionAndFailsafe()
 
 	FailsafeBase::State state{};
 	state.armed = isArmed();
+	state.landed = _vehicle_land_detected.landed;
 	state.vtol_in_transition_mode = _vehicle_status.in_transition_mode;
 	state.mission_finished = _mission_result_sub.get().finished;
 	state.user_intended_mode = _user_mode_intention.get();

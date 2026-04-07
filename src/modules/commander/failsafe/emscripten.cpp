@@ -165,13 +165,14 @@ void set_param_value_float(const std::string &name, float value)
 	set_param_value(name, param_value);
 }
 
-int failsafe_update(bool armed, bool vtol_in_transition_mode, bool mission_finished,
+int failsafe_update(bool armed, bool landed, bool vtol_in_transition_mode, bool mission_finished,
 		    bool user_override, uint8_t user_intended_mode, uint8_t vehicle_type,
 		    failsafe_flags_s status_flags, bool defer_failsafes)
 {
 	uint64_t time_ms = emscripten_date_now();
 	FailsafeBase::State state{};
 	state.armed = armed;
+	state.landed = landed;
 	state.vtol_in_transition_mode = vtol_in_transition_mode;
 	state.mission_finished = mission_finished;
 	state.user_intended_mode = user_intended_mode;

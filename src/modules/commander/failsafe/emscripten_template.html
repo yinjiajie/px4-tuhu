@@ -170,6 +170,11 @@
                             <td></td>
                         </tr>
                         <tr>
+                            <td><label for="landed">Landed:</label></td>
+                            <td><input type="checkbox" id="landed" name="landed" checked></td>
+                            <td></td>
+                        </tr>
+                        <tr>
                             <td><label for="vtol_in_transition_mode">VTOL in Transition Mode:</label></td>
                             <td><input type="checkbox" id="vtol_in_transition_mode" name="vtol_in_transition_mode"></td>
                             <td></td>
@@ -323,12 +328,13 @@
           {{{ JS_STATE_CODE }}}
 
           var armed = document.querySelector('input[id="armed"]').checked;
+          var landed = document.querySelector('input[id="landed"]').checked;
           var vtol_in_transition_mode = document.querySelector('input[id="vtol_in_transition_mode"]').checked;
           var mission_finished = document.querySelector('input[id="mission_finished"]').checked;
           var intended_nav_state = document.querySelector('select[id="intended_nav_state"]').value;
           var vehicle_type = document.querySelector('select[id="vehicle_type"]').value;
           var defer_failsafes = document.querySelector('input[id="defer_failsafes"]').checked;
-          var updated_user_intended_mode = Module.failsafe_update(armed, vtol_in_transition_mode, mission_finished, user_override_requested, parseInt(intended_nav_state),
+          var updated_user_intended_mode = Module.failsafe_update(armed, landed, vtol_in_transition_mode, mission_finished, user_override_requested, parseInt(intended_nav_state),
               parseInt(vehicle_type), state, defer_failsafes);
           user_override_requested = false;
           var action = Module.selected_action();

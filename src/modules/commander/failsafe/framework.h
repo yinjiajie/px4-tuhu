@@ -125,6 +125,7 @@ public:
 
 	struct State {
 		bool armed{false};
+		bool landed{false};
 		uint8_t user_intended_mode{0};
 		uint8_t vehicle_type;
 		bool vtol_in_transition_mode{false};
