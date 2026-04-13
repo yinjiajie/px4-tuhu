@@ -506,7 +506,8 @@ bool LoggedTopics::add_topic(const orb_metadata *topic, uint16_t interval_ms, ui
 
 bool LoggedTopics::add_topic(const char *name, uint16_t interval_ms, uint8_t instance, bool optional)
 {
-	interval_ms /= _rate_factor;
+	// Enforce one storage interval for all topics; slower publishers keep their publication rate.
+	interval_ms = uniform_interval_ms();
 
 	const orb_metadata *const *topics = orb_get_topics();
 	bool success = false;
@@ -543,6 +544,25 @@ bool LoggedTopics::add_topic(const char *name, uint16_t interval_ms, uint8_t ins
 	}
 
 	return success;
+}
+
+uint16_t LoggedTopics::uniform_interval_ms() const
+{
+	if (_rate_factor > 0.f) {
+		const float interval_ms = static_cast<float>(UNIFORM_LOG_INTERVAL_MS) / _rate_factor;
+
+		if (interval_ms < 1.f) {
+			return 1;
+		}
+
+		if (interval_ms > UINT16_MAX) {
+			return UINT16_MAX;
+		}
+
+		return static_cast<uint16_t>(interval_ms);
+	}
+
+	return UNIFORM_LOG_INTERVAL_MS;
 }
 
 bool LoggedTopics::add_topic_multi(const char *name, uint16_t interval_ms, uint8_t max_num_instances, bool optional)
