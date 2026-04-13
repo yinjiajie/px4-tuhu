@@ -79,6 +79,7 @@
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/system_power.h>
 #include <uORB/topics/telemetry_status.h>
+#include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_land_detected.h>
@@ -190,6 +191,8 @@ private:
 
 	void handleAutoDisarm();
 
+	void handleAttitudeAutoDisarm();
+
 	bool handleModeIntentionAndFailsafe();
 
 	void updateParameters();
@@ -237,6 +240,7 @@ private:
 
 	Hysteresis _auto_disarm_landed{false};
 	Hysteresis _auto_disarm_killed{false};
+	Hysteresis _attitude_auto_disarm{false};
 
 	hrt_abstime _datalink_last_heartbeat_open_drone_id_system{0};
 	hrt_abstime _datalink_last_heartbeat_avoidance_system{0};
@@ -292,6 +296,7 @@ private:
 	uORB::Subscription					_iridiumsbd_status_sub{ORB_ID(iridiumsbd_status)};
 	uORB::Subscription					_manual_control_setpoint_sub{ORB_ID(manual_control_setpoint)};
 	uORB::Subscription					_system_power_sub{ORB_ID(system_power)};
+	uORB::Subscription					_vehicle_attitude_sub{ORB_ID(vehicle_attitude)};
 	uORB::Subscription					_vehicle_command_sub{ORB_ID(vehicle_command)};
 	uORB::Subscription					_vehicle_command_mode_executor_sub{ORB_ID(vehicle_command_mode_executor)};
 	uORB::Subscription					_vehicle_land_detected_sub{ORB_ID(vehicle_land_detected)};

@@ -2235,6 +2235,8 @@ void Commander::checkWorkerThread()
 
 void Commander::handleAutoDisarm()
 {
+	handleAttitudeAutoDisarm();
+
 	// Auto disarm when landed or kill switch engaged
 	if (isArmed()) {
 
@@ -2291,6 +2293,31 @@ void Commander::handleAutoDisarm()
 	} else {
 		_auto_disarm_landed.set_state_and_update(false, hrt_absolute_time());
 		_auto_disarm_killed.set_state_and_update(false, hrt_absolute_time());
+	}
+}
+
+void Commander::handleAttitudeAutoDisarm()
+{
+	static constexpr float max_attitude_rad = M_PI_2_F;
+	static constexpr hrt_abstime attitude_auto_disarm_time = 5_s;
+
+	bool attitude_exceeded = false;
+
+	if (isArmed()) {
+		vehicle_attitude_s attitude{};
+
+		if (_vehicle_attitude_sub.copy(&attitude) && (hrt_elapsed_time(&attitude.timestamp) < 500_ms)) {
+			const matrix::Eulerf euler{matrix::Quatf{attitude.q}};
+			attitude_exceeded = (fabsf(euler.phi()) > max_attitude_rad) || (fabsf(euler.theta()) > max_attitude_rad);
+		}
+	}
+
+	_attitude_auto_disarm.set_hysteresis_time_from(false, attitude_auto_disarm_time);
+	_attitude_auto_disarm.set_state_and_update(attitude_exceeded, hrt_absolute_time());
+
+	if (_attitude_auto_disarm.get_state()) {
+		disarm(arm_disarm_reason_t::failure_detector, true);
+		_attitude_auto_disarm.set_state_and_update(false, hrt_absolute_time());
 	}
 }
 
