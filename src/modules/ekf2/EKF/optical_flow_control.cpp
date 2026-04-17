@@ -82,14 +82,13 @@ void Ekf::controlOpticalFlowFusion(const imuSample &imu_delayed)
 		const bool range_finder_recent = isRecent(_aid_src_terrain_range_finder.time_last_fuse, (uint64_t)10e6);
 		const bool terrain_available = isTerrainEstimateValid() || range_finder_recent;
 
-		static constexpr float optical_flow_fusion_max_hagl = 5.f;
 		const float estimated_hagl = _terrain_vpos - _state.pos(2);
 		const float range_finder_hagl = _range_sensor.getDistBottom();
 		const bool optical_flow_height_valid = isTerrainEstimateValid()
 						       ? PX4_ISFINITE(estimated_hagl)
 						       : (range_finder_recent && PX4_ISFINITE(range_finder_hagl));
 		const bool optical_flow_height_allowed = optical_flow_height_valid
-				&& ((isTerrainEstimateValid() ? estimated_hagl : range_finder_hagl) < optical_flow_fusion_max_hagl);
+				&& ((isTerrainEstimateValid() ? estimated_hagl : range_finder_hagl) < _params.max_hagl_for_range_aid);
 
 		const bool continuing_conditions_passing = (_params.flow_ctrl == 1)
 							   && _control_status.flags.tilt_align
