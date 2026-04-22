@@ -1885,13 +1885,25 @@ void Commander::run()
 		_actuator_armed.force_failsafe = (_vehicle_status.nav_state == _vehicle_status.NAVIGATION_STATE_TERMINATION);
 		// _actuator_armed.in_esc_calibration_mode // VEHICLE_CMD_PREFLIGHT_CALIBRATION
 
-		// if force_failsafe or manual_lockdown activated send parachute command
-		if ((!actuator_armed_prev.force_failsafe && _actuator_armed.force_failsafe)
-		    || (!actuator_armed_prev.manual_lockdown && _actuator_armed.manual_lockdown)
-		   ) {
-			if (isArmed()) {
-				send_parachute_command();
+		const bool parachute_release_requested = _actuator_armed.force_failsafe || _actuator_armed.manual_lockdown;
+		const uint8_t parachute_action = parachute_release_requested ? vehicle_command_s::PARACHUTE_ACTION_RELEASE :
+						 vehicle_command_s::PARACHUTE_ACTION_ENABLE;
+		const bool parachute_action_changed = !_last_parachute_action_valid || (_last_parachute_action != parachute_action);
+
+		if (isArmed()) {
+			if (parachute_action_changed
+			    || (now >= _last_parachute_command + COMMANDER_PARACHUTE_COMMAND_INTERVAL)) {
+				const bool play_release_tune = parachute_action_changed
+							       && (parachute_action == vehicle_command_s::PARACHUTE_ACTION_RELEASE);
+				send_parachute_command(parachute_action, play_release_tune);
+				_last_parachute_command = now;
+				_last_parachute_action = parachute_action;
+				_last_parachute_action_valid = true;
 			}
+
+		} else {
+			_last_parachute_command = 0;
+			_last_parachute_action_valid = false;
 		}
 
 		// publish states (armed, control_mode, vehicle_status, failure_detector_status) at 2 Hz or immediately when changed
@@ -2958,11 +2970,42 @@ void Commander::offboardControlCheck()
 	}
 }
 
-void Commander::send_parachute_command()
+void Commander::get_parachute_state(float &height_above_takeoff, float &vertical_velocity)
+{
+	height_above_takeoff = NAN;
+	vertical_velocity = NAN;
+
+	_home_position_sub.update();
+	_vehicle_global_position_sub.update();
+	_vehicle_local_position_sub.update();
+
+	const home_position_s &home_position = _home_position_sub.get();
+	const vehicle_local_position_s &local_position = _vehicle_local_position_sub.get();
+
+	if (home_position.valid_lpos && local_position.z_valid
+	    && PX4_ISFINITE(home_position.z) && PX4_ISFINITE(local_position.z)) {
+		height_above_takeoff = home_position.z - local_position.z;
+
+	} else if (home_position.valid_alt && !_failsafe_flags.global_position_invalid) {
+		const vehicle_global_position_s &global_position = _vehicle_global_position_sub.get();
+
+		if ((global_position.timestamp != 0) && PX4_ISFINITE(home_position.alt) && PX4_ISFINITE(global_position.alt)) {
+			height_above_takeoff = global_position.alt - home_position.alt;
+		}
+	}
+
+	if (local_position.v_z_valid && PX4_ISFINITE(local_position.vz)) {
+		vertical_velocity = -local_position.vz;
+	}
+}
+
+void Commander::send_parachute_command(uint8_t parachute_action, bool play_release_tune)
 {
 	vehicle_command_s vcmd{};
 	vcmd.command = vehicle_command_s::VEHICLE_CMD_DO_PARACHUTE;
-	vcmd.param1 = static_cast<float>(vehicle_command_s::PARACHUTE_ACTION_RELEASE);
+	vcmd.param1 = static_cast<float>(parachute_action);
+	// Custom parachute payload: param2 = height above takeoff [m], param3 = vertical velocity [m/s, up positive].
+	get_parachute_state(vcmd.param2, vcmd.param3);
 
 	vcmd.source_system = _vehicle_status.system_id;
 	vcmd.target_system = _vehicle_status.system_id;
@@ -2973,7 +3016,9 @@ void Commander::send_parachute_command()
 	vcmd.timestamp = hrt_absolute_time();
 	vcmd_pub.publish(vcmd);
 
-	set_tune_override(tune_control_s::TUNE_ID_PARACHUTE_RELEASE);
+	if (play_release_tune) {
+		set_tune_override(tune_control_s::TUNE_ID_PARACHUTE_RELEASE);
+	}
 }
 
 int Commander::print_usage(const char *reason)
