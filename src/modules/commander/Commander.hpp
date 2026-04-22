@@ -56,6 +56,7 @@
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_test.h>
 #include <uORB/topics/failure_detector_status.h>
+#include <uORB/topics/home_position.h>
 #include <uORB/topics/vehicle_command_ack.h>
 #include <uORB/topics/vehicle_control_mode.h>
 #include <uORB/topics/vehicle_status.h>
@@ -83,6 +84,7 @@
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_land_detected.h>
+#include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vtol_vehicle_status.h>
 
 using math::constrain;
@@ -165,7 +167,8 @@ private:
 
 	void updateControlMode();
 
-	void send_parachute_command();
+	void send_parachute_command(uint8_t parachute_action, bool play_release_tune);
+	void get_parachute_state(float &height_above_takeoff, float &vertical_velocity);
 
 	void checkForMissionUpdate();
 
@@ -216,6 +219,7 @@ private:
 
 	/* Decouple update interval and hysteresis counters, all depends on intervals */
 	static constexpr uint64_t COMMANDER_MONITORING_INTERVAL{10_ms};
+	static constexpr uint64_t COMMANDER_PARACHUTE_COMMAND_INTERVAL{1_s};
 
 	vehicle_status_s        _vehicle_status{};
 
@@ -263,8 +267,10 @@ private:
 	hrt_abstime _led_overload_toggle {0};
 
 	hrt_abstime _last_health_and_arming_check{0};
+	hrt_abstime _last_parachute_command{0};
 
 	uint8_t		_battery_warning{battery_status_s::BATTERY_WARNING_NONE};
+	uint8_t		_last_parachute_action{vehicle_command_s::PARACHUTE_ACTION_DISABLE};
 
 	bool _failsafe_user_override_request{false}; ///< override request due to stick movements
 
@@ -282,6 +288,7 @@ private:
 	bool _arm_tune_played{false};
 	bool _have_taken_off_since_arming{false};
 	bool _status_changed{true};
+	bool _last_parachute_action_valid{false};
 
 	vehicle_land_detected_s	_vehicle_land_detected{};
 
@@ -312,6 +319,9 @@ private:
 
 	uORB::SubscriptionData<mission_result_s>		_mission_result_sub{ORB_ID(mission_result)};
 	uORB::SubscriptionData<offboard_control_mode_s>		_offboard_control_mode_sub{ORB_ID(offboard_control_mode)};
+	uORB::SubscriptionData<home_position_s>		_home_position_sub{ORB_ID(home_position)};
+	uORB::SubscriptionData<vehicle_global_position_s>	_vehicle_global_position_sub{ORB_ID(vehicle_global_position)};
+	uORB::SubscriptionData<vehicle_local_position_s>	_vehicle_local_position_sub{ORB_ID(vehicle_local_position)};
 
 	// Publications
 	uORB::Publication<actuator_armed_s>			_actuator_armed_pub{ORB_ID(actuator_armed)};
