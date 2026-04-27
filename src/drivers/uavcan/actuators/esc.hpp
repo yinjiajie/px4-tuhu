@@ -81,10 +81,18 @@ public:
 	esc_status_s &esc_status() { return _esc_status; }
 
 private:
+	static constexpr uint8_t INVALID_NODE_ID = 0xFF;
+
 	/**
 	 * ESC status message reception will be reported via this callback.
 	 */
 	void esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::Status> &msg);
+
+	/**
+	 * Map a UAVCAN node ID to a local esc_status slot. Existing node IDs keep their slot,
+	 * while new node IDs take the first free slot.
+	 */
+	int get_status_index_for_node_id(uint8_t node_id, uint8_t esc_index_hint);
 
 	/**
 	 * Checks all the ESCs freshness based on timestamp, if an ESC exceeds the timeout then is flagged offline.
@@ -98,6 +106,10 @@ private:
 		void (UavcanEscController::*)(const uavcan::TimerEvent &)> TimerCbBinder;
 
 	esc_status_s	_esc_status{};
+	uint8_t		_status_slot_node_id[esc_status_s::CONNECTED_ESC_MAX] {
+		INVALID_NODE_ID, INVALID_NODE_ID, INVALID_NODE_ID, INVALID_NODE_ID,
+		INVALID_NODE_ID, INVALID_NODE_ID, INVALID_NODE_ID, INVALID_NODE_ID
+	};
 
 	uORB::PublicationMulti<esc_status_s> _esc_status_pub{ORB_ID(esc_status)};
 

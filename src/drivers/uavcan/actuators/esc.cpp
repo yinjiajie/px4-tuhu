@@ -130,14 +130,36 @@ UavcanEscController::set_rotor_count(uint8_t count)
 	_rotor_count = count;
 }
 
+int
+UavcanEscController::get_status_index_for_node_id(uint8_t node_id, uint8_t esc_index_hint)
+{
+	for (int index = 0; index < esc_status_s::CONNECTED_ESC_MAX; ++index) {
+		if (_status_slot_node_id[index] == node_id) {
+			return index;
+		}
+	}
+
+	for (int index = 0; index < esc_status_s::CONNECTED_ESC_MAX; ++index) {
+		if (_status_slot_node_id[index] == INVALID_NODE_ID) {
+			_status_slot_node_id[index] = node_id;
+			return index;
+		}
+	}
+
+	return esc_index_hint < esc_status_s::CONNECTED_ESC_MAX ? esc_index_hint : 0;
+}
+
 void
 UavcanEscController::esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::Status> &msg)
 {
-	if (msg.esc_index < esc_status_s::CONNECTED_ESC_MAX) {
-		auto &ref = _esc_status.esc[msg.esc_index];
+	const uint8_t node_id = msg.getSrcNodeID().get();
+	const int status_index = get_status_index_for_node_id(node_id, msg.esc_index);
+
+	if (status_index < esc_status_s::CONNECTED_ESC_MAX) {
+		auto &ref = _esc_status.esc[status_index];
 
 		ref.timestamp       = hrt_absolute_time();
-		ref.esc_address = msg.getSrcNodeID().get();
+		ref.esc_address = node_id;
 		ref.esc_voltage     = msg.voltage;
 		ref.esc_current     = msg.current;
 		ref.esc_temperature = msg.temperature;
