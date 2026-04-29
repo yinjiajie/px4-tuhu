@@ -222,6 +222,8 @@ else
 				echo "ERROR [init] SD card not mounted - trying to load airframe from ROMFS"
 			fi
 		fi
+
+		param set SYS_AUTOSTART 12001
 		. ${R}$AUTOSTART_PATH
 	fi
 	unset AUTOSTART_PATH
@@ -573,6 +575,8 @@ else
 	then
 		zenoh start
 	fi
+
+	#mavlink start -d /dev/ttyS6 -b 115200 -m onboard -r 80000 -Z
 
 #
 # End of autostart.
