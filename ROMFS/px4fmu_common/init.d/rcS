@@ -222,6 +222,8 @@ else
 				echo "ERROR [init] SD card not mounted - trying to load airframe from ROMFS"
 			fi
 		fi
+
+		param set SYS_AUTOSTART 4001
 		. ${R}$AUTOSTART_PATH
 	fi
 	unset AUTOSTART_PATH
