@@ -132,3 +132,8 @@ param set MAV_2_MODE 2
 
 param set COM_FLTT_LOW_ACT 1
 param set COM_QC_ACT 2
+
+param set IMU_GYRO_FFT_EN 1
+param set IMU_GYRO_DNF_EN 2
+param set IMU_GYRO_FFT_MIN 30
+param set IMU_GYRO_FFT_MAX 180
