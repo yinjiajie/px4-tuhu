@@ -169,6 +169,7 @@ private:
 
 	void send_parachute_command(uint8_t parachute_action, bool play_release_tune);
 	void get_parachute_state(float &height_above_takeoff, float &vertical_velocity);
+	void get_parachute_utc_time(float &utc_date, double &utc_time);
 
 	void checkForMissionUpdate();
 
@@ -219,7 +220,7 @@ private:
 
 	/* Decouple update interval and hysteresis counters, all depends on intervals */
 	static constexpr uint64_t COMMANDER_MONITORING_INTERVAL{10_ms};
-	static constexpr uint64_t COMMANDER_PARACHUTE_COMMAND_INTERVAL{1_s};
+	static constexpr uint64_t COMMANDER_PARACHUTE_COMMAND_INTERVAL{100_ms};
 
 	vehicle_status_s        _vehicle_status{};
 
@@ -320,6 +321,7 @@ private:
 	uORB::SubscriptionData<mission_result_s>		_mission_result_sub{ORB_ID(mission_result)};
 	uORB::SubscriptionData<offboard_control_mode_s>		_offboard_control_mode_sub{ORB_ID(offboard_control_mode)};
 	uORB::SubscriptionData<home_position_s>		_home_position_sub{ORB_ID(home_position)};
+	uORB::SubscriptionData<sensor_gps_s>			_vehicle_gps_position_sub{ORB_ID(vehicle_gps_position)};
 	uORB::SubscriptionData<vehicle_global_position_s>	_vehicle_global_position_sub{ORB_ID(vehicle_global_position)};
 	uORB::SubscriptionData<vehicle_local_position_s>	_vehicle_local_position_sub{ORB_ID(vehicle_local_position)};
 
