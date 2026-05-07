@@ -68,6 +68,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <time.h>
 #include <cstring>
 #include <matrix/math.hpp>
 
@@ -2999,13 +3000,67 @@ void Commander::get_parachute_state(float &height_above_takeoff, float &vertical
 	}
 }
 
+void Commander::get_parachute_utc_time(float &utc_date, double &utc_time)
+{
+	utc_date = NAN;
+	utc_time = NAN;
+
+	uint64_t utc_usec = 0;
+
+	_vehicle_gps_position_sub.update();
+	const sensor_gps_s &vehicle_gps_position = _vehicle_gps_position_sub.get();
+
+	if (vehicle_gps_position.time_utc_usec != 0) {
+		utc_usec = vehicle_gps_position.time_utc_usec;
+
+	} else {
+		timespec tv{};
+		px4_clock_gettime(CLOCK_REALTIME, &tv);
+		const uint64_t realtime_utc_usec = static_cast<uint64_t>(tv.tv_sec) * 1000000ULL + tv.tv_nsec / 1000ULL;
+
+		// Reject the default epoch-like value if realtime has not been synchronized yet.
+		if (realtime_utc_usec > 978307200000000ULL) {
+			utc_usec = realtime_utc_usec;
+		}
+	}
+
+	if (utc_usec == 0) {
+		return;
+	}
+
+	const time_t utc_seconds = static_cast<time_t>(utc_usec / 1000000ULL);
+	struct tm utc_tm {};
+
+	if (gmtime_r(&utc_seconds, &utc_tm) == nullptr) {
+		return;
+	}
+
+	const uint32_t year = static_cast<uint32_t>(utc_tm.tm_year + 1900);
+	const uint32_t month = static_cast<uint32_t>(utc_tm.tm_mon + 1);
+	const uint32_t day = static_cast<uint32_t>(utc_tm.tm_mday);
+	const uint32_t hour = static_cast<uint32_t>(utc_tm.tm_hour);
+	const uint32_t minute = static_cast<uint32_t>(utc_tm.tm_min);
+	const uint32_t second = static_cast<uint32_t>(utc_tm.tm_sec);
+
+	const uint32_t packed_date = ((year & 0x7FFFu) << 9) | ((month & 0x0Fu) << 5) | (day & 0x1Fu);
+	const uint32_t packed_time = ((hour & 0x1Fu) << 12) | ((minute & 0x3Fu) << 6) | (second & 0x3Fu);
+
+	utc_date = static_cast<float>(packed_date);
+	utc_time = static_cast<double>(packed_time);
+}
+
 void Commander::send_parachute_command(uint8_t parachute_action, bool play_release_tune)
 {
 	vehicle_command_s vcmd{};
 	vcmd.command = vehicle_command_s::VEHICLE_CMD_DO_PARACHUTE;
 	vcmd.param1 = static_cast<float>(parachute_action);
-	// Custom parachute payload: param2 = height above takeoff [m], param3 = vertical velocity [m/s, up positive].
+	// Custom parachute payload:
+	//  param2 = height above takeoff [m]
+	//  param3 = vertical velocity [m/s, up positive]
+	//  param4 = packed UTC date (bit4..0 day, bit8..5 month, bit23..9 year)
+	//  param5 = packed UTC time (bit16..12 hour, bit11..6 minute, bit5..0 second)
 	get_parachute_state(vcmd.param2, vcmd.param3);
+	get_parachute_utc_time(vcmd.param4, vcmd.param5);
 
 	vcmd.source_system = _vehicle_status.system_id;
 	vcmd.target_system = _vehicle_status.system_id;
