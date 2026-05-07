@@ -1,0 +1,5 @@
+menuconfig MODULES_PARACHUTE_RS485
+	bool "parachute_rs485"
+	default n
+	---help---
+		Enable the RS485 parachute interface module.
