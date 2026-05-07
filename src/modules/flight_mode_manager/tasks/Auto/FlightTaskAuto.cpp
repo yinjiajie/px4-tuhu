@@ -237,7 +237,9 @@ void FlightTaskAuto::_prepareLandSetpoints()
 			       _param_mpc_land_alt2.get(), _param_mpc_land_alt1.get(),
 			       _param_mpc_land_speed.get(), _param_mpc_z_vel_max_dn.get());
 
-	bool range_dist_available = PX4_ISFINITE(_dist_to_bottom);
+	const bool range_dist_available = PX4_ISFINITE(_dist_to_bottom)
+					  && (_sub_vehicle_local_position.get().dist_bottom_sensor_bitfield
+					      & vehicle_local_position_s::DIST_BOTTOM_SENSOR_RANGE);
 
 	if (range_dist_available && _dist_to_bottom <= _param_mpc_land_alt3.get()) {
 		vertical_speed = _param_mpc_land_crawl_speed.get();
