@@ -3,5 +3,8 @@
 # PX4 FMUv6C specific board extras init
 #------------------------------------------------------------------------------
 
+# Free GPS2/ttyS6 in case MAVLink is still configured on that port.
+mavlink stop -d /dev/ttyS6
+
 # Start the RS485 parachute interface on the GPS2 serial port.
 parachute_rs485 start -d /dev/ttyS6 -b 115200

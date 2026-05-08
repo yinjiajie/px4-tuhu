@@ -60,7 +60,6 @@ class ParachuteRS485 : public ModuleBase<ParachuteRS485>, public px4::ScheduledW
 public:
 	ParachuteRS485(const char *port, uint32_t baudrate, bool invert) :
 		ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port)),
-		_serial(port, baudrate),
 		_baudrate(baudrate),
 		_invert(invert)
 	{
@@ -70,7 +69,7 @@ public:
 
 	~ParachuteRS485() override
 	{
-		_serial.close();
+		close_serial();
 	}
 
 	static int task_spawn(int argc, char *argv[])
@@ -138,6 +137,15 @@ public:
 
 	static int custom_command(int argc, char *argv[])
 	{
+		if (!is_running()) {
+			print_usage("not running");
+			return PX4_ERROR;
+		}
+
+		if (argc >= 1 && !strcmp(argv[0], "test")) {
+			return get_instance()->test(argc, argv);
+		}
+
 		return print_usage("unknown command");
 	}
 
@@ -170,20 +178,13 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 		PRINT_MODULE_USAGE_PARAM_FLAG('i', "Enable RX/TX inversion", true);
 		PRINT_MODULE_USAGE_COMMAND_DESCR("stop", "Stop the RS485 parachute interface");
 		PRINT_MODULE_USAGE_COMMAND_DESCR("status", "Print module status");
+		PRINT_MODULE_USAGE_COMMAND("test");
+		PRINT_MODULE_USAGE_ARG("disable|enable|release", "Publish a test parachute command", false);
 		return PX4_OK;
 	}
 
 	bool init()
 	{
-		if (_invert) {
-			_serial.setInvertedMode(true);
-		}
-
-		if (!_serial.open()) {
-			PX4_ERR("failed to open %s at %" PRIu32, _port, _baudrate);
-			return false;
-		}
-
 		ScheduleOnInterval(kUpdateInterval);
 		return true;
 	}
@@ -193,6 +194,7 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 		PX4_INFO("device: %s @ %" PRIu32, _port, _baudrate);
 		PX4_INFO("command_valid: %s", _command_valid ? "true" : "false");
 		PX4_INFO("connected: %s", _connected ? "true" : "false");
+		PX4_INFO("tx_count: %" PRIu32 " last_action: %.0f", _tx_count, (double)_last_command.param1);
 		PX4_INFO("height: %.1f m", (double)_last_status.height_above_takeoff_m);
 		PX4_INFO("voltage: %.1f V", (double)_last_status.voltage_v);
 		PX4_INFO("release_source: %u flags: 0x%x state: 0x%x raw: 0x%08" PRIx32,
@@ -210,12 +212,96 @@ private:
 	static constexpr size_t kTxPacketMaxSize{MAVLINK_MAX_PACKET_LEN};
 	static constexpr size_t kRxBufferSize{MAVLINK_MAX_PACKET_LEN};
 
+	bool open_serial()
+	{
+		if (_serial == nullptr) {
+			_serial = new Serial(_port, _baudrate);
+
+			if (_serial == nullptr) {
+				PX4_ERR("serial alloc failed");
+				return false;
+			}
+		}
+
+		if (_serial->isOpen()) {
+			return true;
+		}
+
+		if (!_serial->setBaudrate(_baudrate)) {
+			PX4_ERR("failed to set baudrate %" PRIu32, _baudrate);
+			return false;
+		}
+
+		if (_invert) {
+			_serial->setInvertedMode(true);
+		}
+
+		if (!_serial->open()) {
+			PX4_ERR("failed to open %s at %" PRIu32, _port, _baudrate);
+			return false;
+		}
+
+		return true;
+	}
+
+	void close_serial()
+	{
+		if (_serial != nullptr) {
+			_serial->close();
+			delete _serial;
+			_serial = nullptr;
+		}
+	}
+
+	int test(int argc, char *argv[])
+	{
+		if (argc < 2) {
+			return print_usage("missing test action");
+		}
+
+		uint8_t parachute_action{};
+
+		if (!strcmp(argv[1], "disable")) {
+			parachute_action = vehicle_command_s::PARACHUTE_ACTION_DISABLE;
+
+		} else if (!strcmp(argv[1], "enable")) {
+			parachute_action = vehicle_command_s::PARACHUTE_ACTION_ENABLE;
+
+		} else if (!strcmp(argv[1], "release")) {
+			parachute_action = vehicle_command_s::PARACHUTE_ACTION_RELEASE;
+
+		} else {
+			return print_usage("unknown test action");
+		}
+
+		vehicle_command_s vcmd{};
+		vcmd.timestamp = hrt_absolute_time();
+		vcmd.command = vehicle_command_s::VEHICLE_CMD_DO_PARACHUTE;
+		vcmd.param1 = static_cast<float>(parachute_action);
+		vcmd.source_system = 1;
+		vcmd.target_system = 1;
+		vcmd.source_component = 1;
+		vcmd.target_component = MAV_COMP_ID_PARACHUTE;
+
+		uORB::Publication<vehicle_command_s> vcmd_pub{ORB_ID(vehicle_command)};
+		vcmd_pub.publish(vcmd);
+
+		ScheduleNow();
+		PX4_INFO("published test command: %s", argv[1]);
+		return PX4_OK;
+	}
+
 	void Run() override
 	{
 		if (should_exit()) {
 			ScheduleClear();
-			_serial.close();
+			close_serial();
 			exit_and_cleanup();
+			return;
+		}
+
+		if (!open_serial()) {
+			publish_disconnected_if_needed(hrt_absolute_time());
 			return;
 		}
 
@@ -227,32 +313,31 @@ private:
 		}
 
 		const hrt_abstime now = hrt_absolute_time();
-		uint8_t tx[kTxPacketMaxSize] {};
-		const size_t tx_size = build_tx_mavlink_packet(_last_command, tx);
+		const size_t tx_size = build_tx_mavlink_packet(_last_command, _tx_packet);
 
-		if (_serial.write(tx, tx_size) != static_cast<ssize_t>(tx_size)) {
+		if (_serial->write(_tx_packet, tx_size) != static_cast<ssize_t>(tx_size)) {
 			PX4_WARN("write failed");
+			close_serial();
 			publish_disconnected_if_needed(now);
 			return;
 		}
 
-		_serial.flush();
+		++_tx_count;
+		_serial->flush();
 
-		uint8_t rx[kRxBufferSize] {};
-		const ssize_t bytes_read = _serial.readAtLeast(rx, sizeof(rx), 1, kReplyTimeoutUs);
+		const ssize_t bytes_read = _serial->readAtLeast(_rx_buffer, sizeof(_rx_buffer), 1, kReplyTimeoutUs);
 
 		if (bytes_read > 0) {
 			for (ssize_t i = 0; i < bytes_read; ++i) {
-				mavlink_message_t message {};
-				mavlink_status_t parse_status {};
-
-				if (mavlink_frame_char_buffer(&_mavlink_rx_buffer, &_mavlink_rx_status, rx[i], &message, &parse_status)) {
-					handle_mavlink_message(now, message);
+				if (mavlink_frame_char_buffer(&_mavlink_rx_buffer, &_mavlink_rx_status, _rx_buffer[i], &_mavlink_message,
+							     &_mavlink_parse_status)) {
+					handle_mavlink_message(now, _mavlink_message);
 				}
 			}
 
 		} else if (bytes_read < 0) {
 			PX4_WARN("read failed");
+			close_serial();
 			publish_disconnected_if_needed(now);
 
 		} else {
@@ -351,7 +436,7 @@ private:
 		_parachute_status_pub.publish(status);
 	}
 
-	Serial _serial {};
+	Serial *_serial{nullptr};
 	char _port[32] {};
 	const uint32_t _baudrate;
 	const bool _invert;
@@ -361,11 +446,16 @@ private:
 
 	vehicle_command_s _last_command {};
 	parachute_status_s _last_status {};
+	uint8_t _tx_packet[kTxPacketMaxSize] {};
+	uint8_t _rx_buffer[kRxBufferSize] {};
 	mavlink_message_t _mavlink_rx_buffer {};
+	mavlink_message_t _mavlink_message {};
+	mavlink_status_t _mavlink_parse_status {};
 	mavlink_status_t _mavlink_rx_status {};
 	hrt_abstime _last_reply_timestamp{0};
 	bool _command_valid{false};
 	bool _connected{false};
+	uint32_t _tx_count{0};
 };
 
 int parachute_rs485_main(int argc, char *argv[])
