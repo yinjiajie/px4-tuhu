@@ -65,17 +65,17 @@ param set PWM_MAIN_MAX2 1900
 param set PWM_MAIN_MAX3 1900
 param set PWM_MAIN_MAX4 1900
 
-param set EFK2_OF_POS_X 0.165
-param set EKF2_OF_POS_Y 0.02
+param set EKF2_OF_POS_X 0.16
+param set EKF2_OF_POS_Y 0.025
 param set EKF2_OF_POS_Z 0.09
 
-param set EKF2_IMU_POS_X 0.024
+param set EKF2_IMU_POS_X 0.03
 param set EKF2_IMU_POS_Y 0
 param set EKF2_IMU_POS_Z -0.02
 
-param set EKF2_GPS_POS_X 0
-param set EKF2_GPS_POS_Y -0.103
-param set EKF2_GPS_POS_Z -0.005
+param set EKF2_GPS_POS_X -0.08
+param set EKF2_GPS_POS_Y 0.03
+param set EKF2_GPS_POS_Z -0.02
 
 param set EKF2_GPS_CTRL 7
 
