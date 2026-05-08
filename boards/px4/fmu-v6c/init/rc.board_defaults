@@ -9,3 +9,8 @@ param set-default BAT2_V_DIV 18.1
 
 param set-default BAT1_A_PER_V 36.367515152
 param set-default BAT2_A_PER_V 36.367515152
+
+# GPS2 is reserved for the RS485 parachute interface on FMUv6C.
+# Use `param set` instead of `set-default` so persisted user params cannot
+# re-enable GPS on /dev/ttyS6 before rc.board_extras starts the driver.
+param set GPS_2_CONFIG 0
