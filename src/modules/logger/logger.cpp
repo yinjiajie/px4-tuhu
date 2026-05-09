@@ -530,9 +530,11 @@ bool Logger::initialize_topics()
 		return false;
 	}
 
-	if ((sdlog_profile & SDLogProfileMask::RAW_IMU_ACCEL_FIFO) || (sdlog_profile & SDLogProfileMask::RAW_IMU_GYRO_FIFO)) {
-		// if we are logging high-rate FIFO, reduce the logging interval & increase process priority to avoid missing samples
-		PX4_INFO("Logging FIFO data: increasing task prio and logging rate");
+	if ((sdlog_profile & SDLogProfileMask::RAW_IMU_ACCEL_FIFO)
+	    || (sdlog_profile & SDLogProfileMask::RAW_IMU_GYRO_FIFO)
+	    || (sdlog_profile & SDLogProfileMask::NOTCH_ANALYSIS)) {
+		// High-rate FIFO and notch-analysis logs need a faster logger loop to avoid missing samples.
+		PX4_INFO("Logging high-rate sensor data: increasing task prio and logging rate");
 		_log_interval = 800;
 		sched_param param{};
 		param.sched_priority = SCHED_PRIORITY_ATTITUDE_CONTROL;

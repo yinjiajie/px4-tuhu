@@ -54,7 +54,8 @@ enum class SDLogProfileMask : int32_t {
 	VISION_AND_AVOIDANCE =  1 << 7,
 	RAW_IMU_GYRO_FIFO =     1 << 8,
 	RAW_IMU_ACCEL_FIFO =    1 << 9,
-	MAVLINK_TUNNEL =        1 << 10
+	MAVLINK_TUNNEL =        1 << 10,
+	NOTCH_ANALYSIS =        1 << 11
 };
 
 enum class MissionLogType : int32_t {
@@ -120,10 +121,16 @@ private:
 	 * @return true on success
 	 */
 	bool add_topic(const char *name, uint16_t interval_ms = 0, uint8_t instance = 0, bool optional = false);
+	bool add_topic_exact(const char *name, uint16_t interval_ms = 0, uint8_t instance = 0, bool optional = false);
 
 	bool add_optional_topic(const char *name, uint16_t interval_ms = 0, uint8_t instance = 0)
 	{
 		return add_topic(name, interval_ms, instance, true);
+	}
+
+	bool add_optional_topic_exact(const char *name, uint16_t interval_ms = 0, uint8_t instance = 0)
+	{
+		return add_topic_exact(name, interval_ms, instance, true);
 	}
 
 	/**
@@ -137,6 +144,8 @@ private:
 	 */
 	bool add_topic_multi(const char *name, uint16_t interval_ms = 0, uint8_t max_num_instances = ORB_MULTI_MAX_INSTANCES,
 			     bool optional = false);
+	bool add_topic_multi_exact(const char *name, uint16_t interval_ms = 0, uint8_t max_num_instances = ORB_MULTI_MAX_INSTANCES,
+				   bool optional = false);
 
 	bool add_optional_topic_multi(const char *name, uint16_t interval_ms = 0,
 				      uint8_t max_num_instances = ORB_MULTI_MAX_INSTANCES)
@@ -176,6 +185,7 @@ private:
 	void add_raw_imu_gyro_fifo();
 	void add_raw_imu_accel_fifo();
 	void add_mavlink_tunnel();
+	void add_notch_analysis_topics();
 
 	/**
 	 * add a logged topic (called by add_topic() above).
@@ -184,6 +194,7 @@ private:
 	bool add_topic(const orb_metadata *topic, uint16_t interval_ms = 0, uint8_t instance = 0, bool optional = false);
 
 	uint16_t uniform_interval_ms() const;
+	static bool use_uniform_interval(const char *name);
 
 	RequestedSubscriptionArray _subscriptions;
 	int _num_mission_subs{0};

@@ -127,9 +127,10 @@ PARAM_DEFINE_INT32(SDLOG_MISSION, 0);
  * 8 : Raw FIFO high-rate IMU (Gyro)
  * 9 : Raw FIFO high-rate IMU (Accel)
  * 10: Logging of mavlink tunnel message (useful for payload communication debugging)
+ * 11: Notch analysis (full-rate gyro FIFO and filtered rate-control topics)
  *
  * @min 0
- * @max 2047
+ * @max 4095
  * @bit 0 Default set (general log analysis)
  * @bit 1 Estimator replay (EKF2)
  * @bit 2 Thermal calibration
@@ -141,6 +142,7 @@ PARAM_DEFINE_INT32(SDLOG_MISSION, 0);
  * @bit 8 Raw FIFO high-rate IMU (Gyro)
  * @bit 9 Raw FIFO high-rate IMU (Accel)
  * @bit 10 Mavlink tunnel message logging
+ * @bit 11 Notch analysis
  * @reboot_required true
  * @group SD Logging
  */

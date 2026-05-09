@@ -393,6 +393,20 @@ void LoggedTopics::add_raw_imu_accel_fifo()
 	add_topic("sensor_accel_fifo");
 }
 
+void LoggedTopics::add_notch_analysis_topics()
+{
+	// Record both the raw gyro FIFO and the filtered rate-control path at full rate so
+	// notch tuning can compare the vibration source against the filtered controller input.
+	add_topic("sensor_gyro_fifo");
+	add_optional_topic_exact("sensor_gyro_fft");
+	add_topic_exact("vehicle_angular_velocity");
+	add_topic_exact("vehicle_rates_setpoint");
+	add_topic_exact("actuator_motors");
+	add_topic("sensor_selection");
+	add_topic("sensors_status_imu", 200);
+	add_topic_multi_exact("vehicle_imu_status", 10, 4);
+}
+
 void LoggedTopics::add_system_identification_topics()
 {
 	// for system id need to log imu and controls at full rate
@@ -506,8 +520,11 @@ bool LoggedTopics::add_topic(const orb_metadata *topic, uint16_t interval_ms, ui
 
 bool LoggedTopics::add_topic(const char *name, uint16_t interval_ms, uint8_t instance, bool optional)
 {
-	// Enforce one storage interval for all topics; slower publishers keep their publication rate.
-	interval_ms = uniform_interval_ms();
+	// Keep the global uniform logger interval, except for raw gyro FIFO where full-rate
+	// samples are required for vibration analysis and dynamic notch tuning.
+	if (use_uniform_interval(name)) {
+		interval_ms = uniform_interval_ms();
+	}
 
 	const orb_metadata *const *topics = orb_get_topics();
 	bool success = false;
@@ -546,6 +563,49 @@ bool LoggedTopics::add_topic(const char *name, uint16_t interval_ms, uint8_t ins
 	return success;
 }
 
+bool LoggedTopics::add_topic_exact(const char *name, uint16_t interval_ms, uint8_t instance, bool optional)
+{
+	const orb_metadata *const *topics = orb_get_topics();
+	bool success = false;
+
+	for (size_t i = 0; i < orb_topics_count(); i++) {
+		if (strcmp(name, topics[i]->o_name) == 0) {
+			bool already_added = false;
+
+			for (int j = 0; j < _subscriptions.count; ++j) {
+				if (_subscriptions.sub[j].id == static_cast<ORB_ID>(topics[i]->o_id) &&
+				    _subscriptions.sub[j].instance == instance) {
+
+					PX4_DEBUG("logging topic %s(%" PRIu8 "), interval: %" PRIu16 ", already added, only setting interval",
+						  topics[i]->o_name, instance, interval_ms);
+
+					_subscriptions.sub[j].interval_ms = interval_ms;
+					success = true;
+					already_added = true;
+					break;
+				}
+			}
+
+			if (!already_added) {
+				success = add_topic(topics[i], interval_ms, instance, optional);
+
+				if (success) {
+					PX4_DEBUG("logging topic: %s(%" PRIu8 "), interval: %" PRIu16, topics[i]->o_name, instance, interval_ms);
+				}
+
+				break;
+			}
+		}
+	}
+
+	return success;
+}
+
+bool LoggedTopics::use_uniform_interval(const char *name)
+{
+	return strcmp(name, "sensor_gyro_fifo") != 0;
+}
+
 uint16_t LoggedTopics::uniform_interval_ms() const
 {
 	if (_rate_factor > 0.f) {
@@ -570,6 +630,15 @@ bool LoggedTopics::add_topic_multi(const char *name, uint16_t interval_ms, uint8
 	// add all possible instances
 	for (uint8_t instance = 0; instance < max_num_instances; instance++) {
 		add_topic(name, interval_ms, instance, optional);
+	}
+
+	return true;
+}
+
+bool LoggedTopics::add_topic_multi_exact(const char *name, uint16_t interval_ms, uint8_t max_num_instances, bool optional)
+{
+	for (uint8_t instance = 0; instance < max_num_instances; instance++) {
+		add_topic_exact(name, interval_ms, instance, optional);
 	}
 
 	return true;
@@ -631,6 +700,10 @@ void LoggedTopics::initialize_configured_topics(SDLogProfileMask profile)
 
 	if (profile & SDLogProfileMask::RAW_IMU_ACCEL_FIFO) {
 		add_raw_imu_accel_fifo();
+	}
+
+	if (profile & SDLogProfileMask::NOTCH_ANALYSIS) {
+		add_notch_analysis_topics();
 	}
 
 	if (profile & SDLogProfileMask::MAVLINK_TUNNEL) {
