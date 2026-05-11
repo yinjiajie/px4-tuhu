@@ -518,6 +518,12 @@ bool FlightTaskAuto::_evaluateTriplets()
 			_yawspeed_setpoint = 0.f;
 
 		} else if (PX4_ISFINITE(_sub_triplet_setpoint.get().current.yaw)) {
+			if (_type == WaypointType::loiter && _type_previous != WaypointType::loiter) {
+				// Entering loiter with an explicit yaw target should not introduce an extra slew from the previous mode.
+				_yaw_sp_prev = _sub_triplet_setpoint.get().current.yaw;
+				_yawspeed_filter.reset(0.f);
+			}
+
 			_yaw_setpoint = _sub_triplet_setpoint.get().current.yaw;
 			_yawspeed_setpoint = NAN;
 
