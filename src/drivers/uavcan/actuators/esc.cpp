@@ -184,11 +184,30 @@ UavcanEscController::esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavca
 		ref.esc_rpm         = msg.rpm;
 		ref.esc_errorcount  = msg.error_count;
 
-		_esc_status.esc_count = _rotor_count;
+		const uint8_t online_flags = check_escs_status();
+
+		// Prefer the configured rotor count when this controller drives the ESCs.
+		// Otherwise fall back to the highest active status slot so downstream users
+		// (for example ESC RPM dynamic notch and ESC battery) can still consume
+		// telemetry-only ESC status messages.
+		uint8_t connected_esc_count = _rotor_count;
+
+		if (connected_esc_count == 0) {
+			for (int index = esc_status_s::CONNECTED_ESC_MAX - 1; index >= 0; --index) {
+				if (online_flags & (1 << index)) {
+					connected_esc_count = index + 1;
+					break;
+				}
+			}
+		}
+
+		_esc_status.esc_count = connected_esc_count;
 		_esc_status.counter += 1;
 		_esc_status.esc_connectiontype = esc_status_s::ESC_CONNECTION_TYPE_CAN;
-		_esc_status.esc_online_flags = check_escs_status();
-		_esc_status.esc_armed_flags = (1 << _rotor_count) - 1;
+		_esc_status.esc_online_flags = online_flags;
+		_esc_status.esc_armed_flags = (connected_esc_count > 0)
+					      ? static_cast<uint8_t>((1u << connected_esc_count) - 1u)
+					      : 0u;
 		_esc_status.timestamp = now;
 		_esc_status_pub.publish(_esc_status);
 	}
