@@ -736,13 +736,14 @@ MissionBlock::setLoiterItemFromCurrentPositionSetpoint(struct mission_item_s *it
 	setLoiterItemCommonFields(item);
 
 	const position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
+	const vehicle_local_position_s *local_position = _navigator->get_local_position();
 
 	item->lat = pos_sp_triplet->current.lat;
 	item->lon = pos_sp_triplet->current.lon;
 	item->altitude = pos_sp_triplet->current.alt;
 	item->loiter_radius = pos_sp_triplet->current.loiter_direction_counter_clockwise ?
 			      -pos_sp_triplet->current.loiter_radius : pos_sp_triplet->current.loiter_radius;
-	item->yaw = pos_sp_triplet->current.yaw;
+	item->yaw = local_position->heading_good_for_control ? local_position->heading : pos_sp_triplet->current.yaw;
 }
 
 void
@@ -763,7 +764,7 @@ MissionBlock::setLoiterItemFromCurrentPosition(struct mission_item_s *item)
 
 	item->altitude = loiter_altitude_amsl;
 	item->loiter_radius = _navigator->get_loiter_radius();
-	item->yaw = NAN;
+	item->yaw = _navigator->get_local_position()->heading_good_for_control ? _navigator->get_local_position()->heading : NAN;
 }
 
 void
@@ -775,7 +776,7 @@ MissionBlock::setLoiterItemFromCurrentPositionWithBreaking(struct mission_item_s
 
 	item->altitude = _navigator->get_global_position()->alt;
 	item->loiter_radius = _navigator->get_loiter_radius();
-	item->yaw = NAN;
+	item->yaw = _navigator->get_local_position()->heading_good_for_control ? _navigator->get_local_position()->heading : NAN;
 }
 
 void
