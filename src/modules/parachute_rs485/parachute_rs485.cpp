@@ -35,6 +35,7 @@
 #include <inttypes.h>
 #include <mavlink.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,7 +75,7 @@ public:
 
 	static int task_spawn(int argc, char *argv[])
 	{
-		const char *device_path = "/dev/ttyS6";
+		const char *device_path = "/dev/ttyS1";
 		int baudrate = 115200;
 		bool invert = false;
 		int ch = '\0';
@@ -173,7 +174,7 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 
 		PRINT_MODULE_USAGE_NAME("parachute_rs485", "module");
 		PRINT_MODULE_USAGE_COMMAND_DESCR("start", "Start the RS485 parachute interface");
-		PRINT_MODULE_USAGE_PARAM_STRING('d', "/dev/ttyS6", "<file:dev>", "Serial device", true);
+		PRINT_MODULE_USAGE_PARAM_STRING('d', "/dev/ttyS1", "<file:dev>", "Serial device", true);
 		PRINT_MODULE_USAGE_PARAM_INT('b', 115200, 0, 3000000, "Baudrate", true);
 		PRINT_MODULE_USAGE_PARAM_FLAG('i', "Enable RX/TX inversion", true);
 		PRINT_MODULE_USAGE_COMMAND_DESCR("stop", "Stop the RS485 parachute interface");
@@ -191,10 +192,38 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 
 	int print_status() override
 	{
+		const uint32_t last_msgid = _last_msgid_valid ? _last_msgid : 0;
+		const uint32_t last_ack_command = _last_ack_valid ? static_cast<uint32_t>(_last_ack_command) : 0;
+		const uint32_t last_ack_result = _last_ack_valid ? static_cast<uint32_t>(_last_ack_result) : 0;
+		const uint32_t last_rx_ms_ago = _last_rx_timestamp != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_rx_timestamp) / 1000) : 0;
+		const uint32_t last_msg_ms_ago = _last_message_timestamp != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_message_timestamp) / 1000) : 0;
+		const uint32_t last_ack_ms_ago = _last_ack_timestamp != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_ack_timestamp) / 1000) : 0;
+
 		PX4_INFO("device: %s @ %" PRIu32, _port, _baudrate);
+		PX4_INFO("inverted: %s", _invert ? "true" : "false");
 		PX4_INFO("command_valid: %s", _command_valid ? "true" : "false");
 		PX4_INFO("connected: %s", _connected ? "true" : "false");
 		PX4_INFO("tx_count: %" PRIu32 " last_action: %.0f", _tx_count, (double)_last_command.param1);
+		PX4_INFO("rx_reads: %" PRIu32 " timeouts: %" PRIu32 " read_errors: %" PRIu32 " last_read: %" PRId32,
+			 _rx_read_count, _rx_timeout_count, _read_error_count, _last_read_result);
+		PX4_INFO("rx_bytes: %" PRIu32 " rx_msgs: %" PRIu32 " ack_count: %" PRIu32 " parachute_ack: %" PRIu32,
+			 _rx_byte_count, _rx_message_count, _ack_count, _parachute_ack_count);
+		PX4_INFO("parse_errors: %" PRIu32 " buffer_overruns: %" PRIu32 " packet_drops: %" PRIu32,
+			 _parse_error_count, _buffer_overrun_count, _packet_drop_count);
+		PX4_INFO("last_msgid: %s%" PRIu32 " last_ack_cmd: %s%" PRIu32 " last_ack_result: %s%" PRIu32,
+			 _last_msgid_valid ? "" : "n/a ",
+			 last_msgid,
+			 _last_ack_valid ? "" : "n/a ",
+			 last_ack_command,
+			 _last_ack_valid ? "" : "n/a ",
+			 last_ack_result);
+		PX4_INFO("last_rx_ms_ago: %s%" PRIu32 " last_msg_ms_ago: %s%" PRIu32 " last_ack_ms_ago: %s%" PRIu32,
+			 _last_rx_timestamp != 0 ? "" : "n/a ",
+			 last_rx_ms_ago,
+			 _last_message_timestamp != 0 ? "" : "n/a ",
+			 last_msg_ms_ago,
+			 _last_ack_timestamp != 0 ? "" : "n/a ",
+			 last_ack_ms_ago);
 		PX4_INFO("height: %.1f m", (double)_last_status.height_above_takeoff_m);
 		PX4_INFO("voltage: %.1f V", (double)_last_status.voltage_v);
 		PX4_INFO("release_source: %u flags: 0x%x state: 0x%x raw: 0x%08" PRIx32,
@@ -202,12 +231,15 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 			 static_cast<unsigned>(_last_status.flags),
 			 static_cast<unsigned>(_last_status.state),
 			 _last_status.raw);
+		PX4_INFO("last_tx_size: %zu bytes", _last_tx_size);
+		print_packet_bytes("last_tx_packet", _tx_packet, _last_tx_size);
 		return PX4_OK;
 	}
 
 private:
 	static constexpr uint32_t kUpdateInterval{100_ms};
-	static constexpr uint32_t kReplyTimeoutUs{20000};
+	// Serial::readAtLeast() uses the same timeout convention as other PX4 serial callers here: milliseconds.
+	static constexpr uint32_t kReplyTimeoutMs{20};
 	static constexpr hrt_abstime kConnectionTimeout{500_ms};
 	static constexpr size_t kTxPacketMaxSize{MAVLINK_MAX_PACKET_LEN};
 	static constexpr size_t kRxBufferSize{MAVLINK_MAX_PACKET_LEN};
@@ -314,6 +346,7 @@ private:
 
 		const hrt_abstime now = hrt_absolute_time();
 		const size_t tx_size = build_tx_mavlink_packet(_last_command, _tx_packet);
+		_last_tx_size = tx_size;
 
 		if (_serial->write(_tx_packet, tx_size) != static_cast<ssize_t>(tx_size)) {
 			PX4_WARN("write failed");
@@ -323,24 +356,46 @@ private:
 		}
 
 		++_tx_count;
-		_serial->flush();
+		// Serial::flush() maps to tcflush(TCIOFLUSH) on NuttX and drops queued TX/RX data.
+		// That breaks half-duplex request/reply exchanges on UART-backed RS485 adapters.
+		const uint32_t tx_wire_time_us = 500 + static_cast<uint32_t>((tx_size * 1000000ULL * 10) / _baudrate);
+		px4_usleep(tx_wire_time_us);
 
-		const ssize_t bytes_read = _serial->readAtLeast(_rx_buffer, sizeof(_rx_buffer), 1, kReplyTimeoutUs);
+		const ssize_t bytes_read = _serial->readAtLeast(_rx_buffer, sizeof(_rx_buffer), 1, kReplyTimeoutMs);
+		_last_read_result = static_cast<int32_t>(bytes_read);
 
 		if (bytes_read > 0) {
+			++_rx_read_count;
+			_rx_byte_count += static_cast<uint32_t>(bytes_read);
+			_last_rx_timestamp = now;
+
+			const uint8_t parse_error_before = _mavlink_parse_status.parse_error;
+			const uint8_t buffer_overrun_before = _mavlink_parse_status.buffer_overrun;
+			const uint16_t packet_drop_before = _mavlink_parse_status.packet_rx_drop_count;
+
 			for (ssize_t i = 0; i < bytes_read; ++i) {
 				if (mavlink_frame_char_buffer(&_mavlink_rx_buffer, &_mavlink_rx_status, _rx_buffer[i], &_mavlink_message,
 							     &_mavlink_parse_status)) {
+					++_rx_message_count;
+					_last_msgid = _mavlink_message.msgid;
+					_last_msgid_valid = true;
+					_last_message_timestamp = now;
 					handle_mavlink_message(now, _mavlink_message);
 				}
 			}
 
+			_parse_error_count += counter_delta(_mavlink_parse_status.parse_error, parse_error_before);
+			_buffer_overrun_count += counter_delta(_mavlink_parse_status.buffer_overrun, buffer_overrun_before);
+			_packet_drop_count += counter_delta(_mavlink_parse_status.packet_rx_drop_count, packet_drop_before);
+
 		} else if (bytes_read < 0) {
+			++_read_error_count;
 			PX4_WARN("read failed");
 			close_serial();
 			publish_disconnected_if_needed(now);
 
 		} else {
+			++_rx_timeout_count;
 			publish_disconnected_if_needed(now);
 		}
 	}
@@ -376,7 +431,56 @@ private:
 			static_cast<float>(command.param6),
 			command.param7);
 
-		return mavlink_msg_to_send_buffer(packet, &msg);
+		// Serialize a fixed-width MAVLink 2 COMMAND_LONG frame so the trailing zero confirmation byte
+		// is kept on the wire for parachute modules that expect a constant 45-byte packet.
+		const uint8_t payload_length = MAVLINK_MSG_ID_COMMAND_LONG_LEN;
+		packet[0] = MAVLINK_STX;
+		packet[1] = payload_length;
+		packet[2] = 0; // incompat_flags
+		packet[3] = 0; // compat_flags
+		packet[4] = msg.seq;
+		packet[5] = msg.sysid;
+		packet[6] = msg.compid;
+		packet[7] = msg.msgid & 0xFF;
+		packet[8] = (msg.msgid >> 8) & 0xFF;
+		packet[9] = (msg.msgid >> 16) & 0xFF;
+		memcpy(&packet[10], _MAV_PAYLOAD(&msg), payload_length);
+
+		uint16_t checksum = crc_calculate(&packet[1], MAVLINK_CORE_HEADER_LEN);
+		crc_accumulate_buffer(&checksum, reinterpret_cast<const char *>(&packet[10]), payload_length);
+		crc_accumulate(MAVLINK_MSG_ID_COMMAND_LONG_CRC, &checksum);
+		packet[10 + payload_length] = static_cast<uint8_t>(checksum & 0xFF);
+		packet[11 + payload_length] = static_cast<uint8_t>(checksum >> 8);
+
+		return 10 + payload_length + 2;
+	}
+
+	template<typename T>
+	static uint32_t counter_delta(T after, T before)
+	{
+		return static_cast<T>(after - before);
+	}
+
+	static void print_packet_bytes(const char *label, const uint8_t *packet, size_t packet_size)
+	{
+		if (packet_size == 0) {
+			PX4_INFO("%s: n/a", label);
+			return;
+		}
+
+		char line[3 * 16 + 1] {};
+
+		for (size_t offset = 0; offset < packet_size; offset += 16) {
+			const size_t chunk_size = math::min<size_t>(16, packet_size - offset);
+			size_t cursor = 0;
+
+			for (size_t i = 0; i < chunk_size; ++i) {
+				cursor += snprintf(&line[cursor], sizeof(line) - cursor, "%02x%s",
+						  packet[offset + i], (i + 1 < chunk_size) ? " " : "");
+			}
+
+			PX4_INFO("%s[%zu]: %s", label, offset / 16, line);
+		}
 	}
 
 	void handle_mavlink_message(hrt_abstime now, const mavlink_message_t &message)
@@ -385,8 +489,14 @@ private:
 		case MAVLINK_MSG_ID_COMMAND_ACK: {
 				mavlink_command_ack_t ack {};
 				mavlink_msg_command_ack_decode(&message, &ack);
+				++_ack_count;
+				_last_ack_command = ack.command;
+				_last_ack_result = ack.result;
+				_last_ack_valid = true;
+				_last_ack_timestamp = now;
 
 				if (ack.command == MAV_CMD_DO_PARACHUTE) {
+					++_parachute_ack_count;
 					mark_connected(now);
 					decode_and_publish(now, static_cast<uint32_t>(ack.result_param2));
 				}
@@ -453,9 +563,29 @@ private:
 	mavlink_status_t _mavlink_parse_status {};
 	mavlink_status_t _mavlink_rx_status {};
 	hrt_abstime _last_reply_timestamp{0};
+	hrt_abstime _last_rx_timestamp{0};
+	hrt_abstime _last_message_timestamp{0};
+	hrt_abstime _last_ack_timestamp{0};
 	bool _command_valid{false};
 	bool _connected{false};
 	uint32_t _tx_count{0};
+	uint32_t _rx_read_count{0};
+	uint32_t _rx_timeout_count{0};
+	uint32_t _read_error_count{0};
+	uint32_t _rx_byte_count{0};
+	uint32_t _rx_message_count{0};
+	uint32_t _ack_count{0};
+	uint32_t _parachute_ack_count{0};
+	uint32_t _parse_error_count{0};
+	uint32_t _buffer_overrun_count{0};
+	uint32_t _packet_drop_count{0};
+	uint32_t _last_msgid{0};
+	uint16_t _last_ack_command{0};
+	uint8_t _last_ack_result{0};
+	size_t _last_tx_size{0};
+	int32_t _last_read_result{0};
+	bool _last_msgid_valid{false};
+	bool _last_ack_valid{false};
 };
 
 int parachute_rs485_main(int argc, char *argv[])
