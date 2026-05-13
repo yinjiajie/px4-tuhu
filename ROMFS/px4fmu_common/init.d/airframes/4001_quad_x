@@ -102,3 +102,5 @@ param set SER_TEL4_BAUD 921600
 
 param set COM_FLTT_LOW_ACT 1
 param set COM_QC_ACT 2
+
+param set EKF2_RNG_A_HMAX 5
