@@ -1460,25 +1460,25 @@ Mavlink::configure_streams_to_default(const char *configure_single_stream)
 	case MAVLINK_MODE_ONBOARD:
 		// Note: streams requiring low latency come first
 		configure_stream_local("TIMESYNC", 10.0f);
-		configure_stream_local("CAMERA_TRIGGER", unlimited_rate);
-		configure_stream_local("HIGHRES_IMU", 50.0f);
+		configure_stream_local("CAMERA_TRIGGER", 0.0);
+		configure_stream_local("HIGHRES_IMU", 200.0f);
 		configure_stream_local("LOCAL_POSITION_NED", 30.0f);
 		configure_stream_local("ATTITUDE", 100.0f);
 		configure_stream_local("ALTITUDE", 10.0f);
-		configure_stream_local("DISTANCE_SENSOR", 10.0f);
-		configure_stream_local("ESC_INFO", 10.0f);
-		configure_stream_local("ESC_STATUS", 10.0f);
-		configure_stream_local("MOUNT_ORIENTATION", 10.0f);
-		configure_stream_local("OBSTACLE_DISTANCE", 10.0f);
-		configure_stream_local("ODOMETRY", 30.0f);
+		configure_stream_local("DISTANCE_SENSOR", 0.0f);
+		configure_stream_local("ESC_INFO", 0.0f);
+		configure_stream_local("ESC_STATUS", 0.0f);
+		configure_stream_local("MOUNT_ORIENTATION", 0.0f);
+		configure_stream_local("OBSTACLE_DISTANCE", 0.0f);
+		configure_stream_local("ODOMETRY", 0.0f);
 
-		configure_stream_local("ADSB_VEHICLE", unlimited_rate);
+		configure_stream_local("ADSB_VEHICLE", 0.0);
 		configure_stream_local("ATTITUDE_QUATERNION", 50.0f);
-		configure_stream_local("ATTITUDE_TARGET", 10.0f);
+		configure_stream_local("ATTITUDE_TARGET", 0.0f);
 		configure_stream_local("AVAILABLE_MODES", 0.3f);
 		configure_stream_local("BATTERY_STATUS", 0.5f);
-		configure_stream_local("CAMERA_IMAGE_CAPTURED", unlimited_rate);
-		configure_stream_local("COLLISION", unlimited_rate);
+		configure_stream_local("CAMERA_IMAGE_CAPTURED", 0.0);
+		configure_stream_local("COLLISION", 0.0);
 		configure_stream_local("CURRENT_MODE", 0.5f);
 		configure_stream_local("EFI_STATUS", 2.0f);
 		configure_stream_local("ESTIMATOR_STATUS", 1.0f);
@@ -1486,23 +1486,23 @@ Mavlink::configure_streams_to_default(const char *configure_single_stream)
 		configure_stream_local("GIMBAL_DEVICE_ATTITUDE_STATUS", 1.0f);
 		configure_stream_local("GIMBAL_DEVICE_SET_ATTITUDE", 5.0f);
 		configure_stream_local("GIMBAL_MANAGER_STATUS", 0.5f);
-		configure_stream_local("GLOBAL_POSITION_INT", 50.0f);
-		configure_stream_local("GPS2_RAW", unlimited_rate);
+		configure_stream_local("GLOBAL_POSITION_INT", 0.0f);
+		configure_stream_local("GPS2_RAW", 0.0);
 		configure_stream_local("GPS_GLOBAL_ORIGIN", 1.0f);
-		configure_stream_local("GPS_RAW_INT", unlimited_rate);
+		configure_stream_local("GPS_RAW_INT", 0.0);
 		configure_stream_local("GPS_STATUS", 1.0f);
 		configure_stream_local("HOME_POSITION", 0.5f);
 		configure_stream_local("HYGROMETER_SENSOR", 1.0f);
-		configure_stream_local("NAV_CONTROLLER_OUTPUT", 10.0f);
+		configure_stream_local("NAV_CONTROLLER_OUTPUT", 0.0f);
 		configure_stream_local("OPEN_DRONE_ID_LOCATION", 1.f);
 		configure_stream_local("OPEN_DRONE_ID_SYSTEM", 1.f);
-		configure_stream_local("OPTICAL_FLOW_RAD", 10.0f);
+		configure_stream_local("OPTICAL_FLOW_RAD", 0.0f);
 		configure_stream_local("ORBIT_EXECUTION_STATUS", 5.0f);
 		configure_stream_local("PING", 1.0f);
-		configure_stream_local("POSITION_TARGET_GLOBAL_INT", 10.0f);
-		configure_stream_local("POSITION_TARGET_LOCAL_NED", 10.0f);
+		configure_stream_local("POSITION_TARGET_GLOBAL_INT", 0.0f);
+		configure_stream_local("POSITION_TARGET_LOCAL_NED", 0.0f);
 		configure_stream_local("RAW_RPM", 5.0f);
-		configure_stream_local("RC_CHANNELS", 20.0f);
+		configure_stream_local("RC_CHANNELS", 0.0f);
 		configure_stream_local("SCALED_PRESSURE", 1.0f);
 		configure_stream_local("SERVO_OUTPUT_RAW_0", 10.0f);
 		configure_stream_local("SYS_STATUS", 5.0f);
@@ -1514,11 +1514,11 @@ Mavlink::configure_streams_to_default(const char *configure_single_stream)
 		configure_stream_local("WIND_COV", 10.0f);
 
 #if !defined(CONSTRAINED_FLASH)
-		configure_stream_local("DEBUG", 10.0f);
-		configure_stream_local("DEBUG_FLOAT_ARRAY", 10.0f);
-		configure_stream_local("DEBUG_VECT", 10.0f);
-		configure_stream_local("NAMED_VALUE_FLOAT", 10.0f);
-		configure_stream_local("LINK_NODE_STATUS", 1.0f);
+		configure_stream_local("DEBUG", 0.0f);
+		configure_stream_local("DEBUG_FLOAT_ARRAY", 0.0f);
+		configure_stream_local("DEBUG_VECT", 0.0f);
+		configure_stream_local("NAMED_VALUE_FLOAT", 0.0f);
+		configure_stream_local("LINK_NODE_STATUS", 0.0f);
 #if defined(MAVLINK_MSG_ID_FIGURE_EIGHT_EXECUTION_STATUS)
 		configure_stream_local("FIGURE_EIGHT_EXECUTION_STATUS", 5.0f);
 #endif // MAVLINK_MSG_ID_FIGURE_EIGHT_EXECUTION_STATUS

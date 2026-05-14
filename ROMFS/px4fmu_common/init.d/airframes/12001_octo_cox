@@ -109,7 +109,7 @@ param set EKF2_GPS_POS_X 0
 param set EKF2_GPS_POS_Y -0.09
 param set EKF2_GPS_POS_Z 0.01
 
-param set EKF2_GPS_CTRL 7
+# param set EKF2_GPS_CTRL 7
 
 param set COM_RCL_EXCEPT 7
 param set NAV_RCL_ACT 1
@@ -138,4 +138,4 @@ param set IMU_GYRO_DNF_EN 2
 param set IMU_GYRO_FFT_MIN 30
 param set IMU_GYRO_FFT_MAX 180
 
-param set EKF2_RNG_A_HMAX 5
+# param set EKF2_RNG_A_HMAX 5
