@@ -742,6 +742,19 @@ PARAM_DEFINE_INT32(COM_FLT_PROFILE, 0);
 PARAM_DEFINE_INT32(COM_ARM_CHK_ESCS, 0);
 
 /**
+ * Bypass external activation lock
+ *
+ * By default, arming is blocked until the companion computer sends
+ * activation_status.active=true. Set this parameter to 1 to bypass the
+ * external activation requirement and allow arming from QGroundControl
+ * even if no activation message is received from the companion.
+ *
+ * @group Commander
+ * @boolean
+ */
+PARAM_DEFINE_INT32(COM_ACT_UNLOCK, 0);
+
+/**
  * Condition to enter prearmed mode
  *
  * Condition to enter the prearmed state, an intermediate state between disarmed and armed

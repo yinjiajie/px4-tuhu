@@ -34,6 +34,7 @@
 #pragma once
 
 #include "../Common.hpp"
+#include <uORB/topics/activation_status.h>
 #include <uORB/topics/arming_check_request.h>
 #include <uORB/topics/arming_check_reply.h>
 #include <uORB/Subscription.hpp>
@@ -73,6 +74,8 @@ private:
 	static_assert(REQUEST_TIMEOUT < UPDATE_INTERVAL, "keep timeout < update interval");
 	static constexpr int NUM_NO_REPLY_UNTIL_UNRESPONSIVE = 3; ///< Mode timeout = this value * UPDATE_INTERVAL
 
+	static constexpr bool COMPANION_ACTIVATION_REQUIRED = true;
+
 	void checkNonRegisteredModes(const Context &context, Report &reporter) const;
 
 	bool registrationValid(int reg_idx) const { return ((1u << reg_idx) & _active_registrations_mask) != 0; }
@@ -92,6 +95,12 @@ private:
 	unsigned _active_registrations_mask{0};
 	Registration _registrations[MAX_NUM_REGISTRATIONS] {};
 
+	struct ActivationStatusState {
+		bool valid{false};
+		bool active{false};
+		int32_t request_id{0};
+	} _activation_status_state {};
+
 	uint8_t _first_external_nav_state = vehicle_status_s::NAVIGATION_STATE_MAX;
 	uint8_t _last_external_nav_state = vehicle_status_s::NAVIGATION_STATE_MAX;
 
@@ -102,7 +111,12 @@ private:
 
 	uint8_t _current_request_id{0};
 
+	uORB::Subscription _activation_status_sub{ORB_ID(activation_status)};
 	uORB::Subscription _arming_check_reply_sub{ORB_ID(arming_check_reply)};
 
 	uORB::Publication<arming_check_request_s> _arming_check_request_pub{ORB_ID(arming_check_request)};
+
+	DEFINE_PARAMETERS_CUSTOM_PARENT(HealthAndArmingCheckBase,
+					(ParamInt<px4::params::COM_ACT_UNLOCK>) _param_com_act_unlock
+				       );
 };

@@ -45,6 +45,7 @@ set(msg_files
 	ActuatorServos.msg
 	ActuatorServosTrim.msg
 	ActuatorTest.msg
+	ActivationStatus.msg
 	AdcReport.msg
 	Airspeed.msg
 	AirspeedValidated.msg

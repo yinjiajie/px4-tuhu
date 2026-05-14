@@ -111,6 +111,30 @@ void ExternalChecks::checkAndReport(const Context &context, Report &reporter)
 {
 	checkNonRegisteredModes(context, reporter);
 
+	if (COMPANION_ACTIVATION_REQUIRED) {
+		const bool activation_bypassed = _param_com_act_unlock.get() == 1;
+		const bool companion_active = _activation_status_state.valid && _activation_status_state.active;
+
+		if (!activation_bypassed && !companion_active && !_activation_status_state.valid) {
+			/* EVENT
+			 * @description
+			 * Wait for the RK3588 companion to send its activation status before arming.
+			 */
+			reporter.armingCheckFailure(NavModes::All, health_component_t::system,
+						    events::ID("check_external_activation_unavailable"),
+						    events::Log::Error, "Companion activation unavailable");
+
+		} else if (!activation_bypassed && !companion_active) {
+			/* EVENT
+			 * @description
+			 * The RK3588 companion reported that activation is not complete.
+			 */
+			reporter.armingCheckFailure(NavModes::All, health_component_t::system,
+						    events::ID("check_external_activation_inactive"),
+						    events::Log::Error, "Companion is not active");
+		}
+	}
+
 	if (_active_registrations_mask == 0) {
 		return;
 	}
@@ -215,11 +239,17 @@ void ExternalChecks::checkAndReport(const Context &context, Report &reporter)
 
 void ExternalChecks::update()
 {
-	if (_active_registrations_mask == 0) {
-		return;
-	}
-
 	const hrt_abstime now = hrt_absolute_time();
+
+	activation_status_s activation_status;
+	int max_num_activation_updates = activation_status_s::ORB_QUEUE_LENGTH;
+
+	while (_activation_status_sub.update(&activation_status) && --max_num_activation_updates >= 0) {
+		_activation_status_state.valid = true;
+		_activation_status_state.active = activation_status.active;
+		_activation_status_state.request_id = activation_status.request_id;
+		_param_com_act_unlock.commit_no_notification(activation_status.active ? 1 : 0);
+	}
 
 	// Check for incoming replies
 	arming_check_reply_s reply;
@@ -245,10 +275,11 @@ void ExternalChecks::update()
 	}
 
 	if (_last_update > 0) {
-		if (_reply_received_mask == _active_registrations_mask) { // Got all responses
-			// Nothing to do
-		} else if (now > _last_update + REQUEST_TIMEOUT && !_had_timeout) { // Timeout
+		const bool timed_out = now > _last_update + REQUEST_TIMEOUT && !_had_timeout;
+
+		if (timed_out) {
 			_had_timeout = true;
+
 			unsigned no_reply = _active_registrations_mask & ~_reply_received_mask;
 
 			for (int i = 0; i < MAX_NUM_REGISTRATIONS; ++i) {
@@ -275,12 +306,12 @@ void ExternalChecks::update()
 	}
 
 	// Start a new request?
-	if (now > _last_update + UPDATE_INTERVAL) {
+	if (_active_registrations_mask != 0 && now > _last_update + UPDATE_INTERVAL) {
 		_reply_received_mask = 0;
 		_last_update = now;
 		_had_timeout = false;
 
-		// Request the state from all registered components
+		// Request the state from all registered external arming checks
 		arming_check_request_s request{};
 		request.request_id = ++_current_request_id;
 		request.timestamp = hrt_absolute_time();
