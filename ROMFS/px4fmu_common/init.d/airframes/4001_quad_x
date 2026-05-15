@@ -74,7 +74,7 @@ param set EKF2_IMU_POS_Y 0
 param set EKF2_IMU_POS_Z -0.02
 
 param set EKF2_GPS_POS_X 0
-param set EKF2_GPS_POS_Y -0.103
+param set EKF2_GPS_POS_Y 0.03
 param set EKF2_GPS_POS_Z -0.005
 
 param set EKF2_GPS_CTRL 7
@@ -103,3 +103,10 @@ param set COM_FLTT_LOW_ACT 1
 param set COM_QC_ACT 2
 
 param set EKF2_RNG_A_HMAX 5
+
+param set SENS_IMU_MODE 1
+param set EKF2_MULTI_IMU 1
+param set CAL_ACC0_PRIO 25
+param set CAL_ACC1_PRIO 100
+param set CAL_GYRO0_PRIO 25
+param set CAL_GYRO1_PRIO 100
