@@ -1456,6 +1456,27 @@ Commander::handle_command(const vehicle_command_s &cmd)
 		answer_command(cmd, vehicle_command_ack_s::VEHICLE_CMD_RESULT_ACCEPTED);
 		break;
 
+	case vehicle_command_s::VEHICLE_CMD_EXTERNAL_ACTIVATION: {
+			if (!PX4_ISFINITE(cmd.param1) || !PX4_ISFINITE(cmd.param2)) {
+				cmd_result = vehicle_command_ack_s::VEHICLE_CMD_RESULT_DENIED;
+				break;
+			}
+
+			const int32_t active_value = static_cast<int32_t>(lroundf(cmd.param1));
+			const int32_t request_id = static_cast<int32_t>(lroundf(cmd.param2));
+
+			if (active_value != 0 && active_value != 1) {
+				cmd_result = vehicle_command_ack_s::VEHICLE_CMD_RESULT_DENIED;
+				break;
+			}
+
+			_health_and_arming_checks.externalChecks().setCompanionActivation(active_value == 1, request_id);
+			// This ACK confirms receipt of the companion activation command. Echo the request ID so the
+			// companion computer can correlate the reply with the command it just sent.
+			answer_command(cmd, vehicle_command_ack_s::VEHICLE_CMD_RESULT_ACCEPTED, request_id);
+			return true;
+		}
+
 	case vehicle_command_s::VEHICLE_CMD_DO_SET_ACTUATOR:
 		answer_command(cmd, vehicle_command_ack_s::VEHICLE_CMD_RESULT_ACCEPTED);
 		break;
@@ -2597,7 +2618,7 @@ void Commander::printRejectMode(uint8_t nav_state)
 	}
 }
 
-void Commander::answer_command(const vehicle_command_s &cmd, uint8_t result)
+void Commander::answer_command(const vehicle_command_s &cmd, uint8_t result, int32_t result_param2)
 {
 	switch (result) {
 	case vehicle_command_ack_s::VEHICLE_CMD_RESULT_ACCEPTED:
@@ -2634,6 +2655,7 @@ void Commander::answer_command(const vehicle_command_s &cmd, uint8_t result)
 	command_ack.result = result;
 	command_ack.target_system = cmd.source_system;
 	command_ack.target_component = cmd.source_component;
+	command_ack.result_param2 = result_param2;
 	command_ack.timestamp = hrt_absolute_time();
 	_vehicle_command_ack_pub.publish(command_ack);
 }

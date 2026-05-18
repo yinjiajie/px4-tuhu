@@ -136,11 +136,6 @@ void
 MavlinkReceiver::handle_message(mavlink_message_t *msg)
 {
 	switch (msg->msgid) {
-#if defined(MAVLINK_MSG_ID_ACTIVATION_STATUS)
-	case MAVLINK_MSG_ID_ACTIVATION_STATUS:
-		handle_message_activation_status(msg);
-		break;
-#endif
 	case MAVLINK_MSG_ID_COMMAND_LONG:
 		handle_message_command_long(msg);
 		break;
@@ -385,25 +380,6 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 	   This is used in the '-w' command-line flag. */
 	_mavlink->set_has_received_messages(true);
 }
-
-#if defined(MAVLINK_MSG_ID_ACTIVATION_STATUS)
-void
-MavlinkReceiver::handle_message_activation_status(mavlink_message_t *msg)
-{
-	mavlink_activation_status_t mavlink_activation_status{};
-	mavlink_msg_activation_status_decode(msg, &mavlink_activation_status);
-
-	activation_status_s activation_status{};
-	activation_status.timestamp = hrt_absolute_time();
-	activation_status.active = mavlink_activation_status.active != 0;
-	activation_status.request_id = mavlink_activation_status.request_id;
-	_activation_status_pub.publish(activation_status);
-
-	mavlink_activation_reply_t activation_reply{};
-	activation_reply.request_id = mavlink_activation_status.request_id;
-	mavlink_msg_activation_reply_send_struct(_mavlink->get_channel(), &activation_reply);
-}
-#endif
 
 bool
 MavlinkReceiver::evaluate_target_ok(int command, int target_system, int target_component)

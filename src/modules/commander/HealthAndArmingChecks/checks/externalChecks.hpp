@@ -34,7 +34,6 @@
 #pragma once
 
 #include "../Common.hpp"
-#include <uORB/topics/activation_status.h>
 #include <uORB/topics/arming_check_request.h>
 #include <uORB/topics/arming_check_reply.h>
 #include <uORB/Subscription.hpp>
@@ -65,6 +64,7 @@ public:
 	int addRegistration(int8_t nav_mode_id, int8_t replaces_nav_state);
 	bool removeRegistration(int registration_id, int8_t nav_mode_id);
 	void update();
+	void setCompanionActivation(bool active, int32_t request_id);
 
 	bool isUnresponsive(int registration_id);
 
@@ -111,7 +111,6 @@ private:
 
 	uint8_t _current_request_id{0};
 
-	uORB::Subscription _activation_status_sub{ORB_ID(activation_status)};
 	uORB::Subscription _arming_check_reply_sub{ORB_ID(arming_check_reply)};
 
 	uORB::Publication<arming_check_request_s> _arming_check_request_pub{ORB_ID(arming_check_request)};

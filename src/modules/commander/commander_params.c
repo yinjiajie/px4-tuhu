@@ -744,10 +744,12 @@ PARAM_DEFINE_INT32(COM_ARM_CHK_ESCS, 0);
 /**
  * Bypass external activation lock
  *
- * By default, arming is blocked until the companion computer sends
- * activation_status.active=true. Set this parameter to 1 to bypass the
- * external activation requirement and allow arming from QGroundControl
- * even if no activation message is received from the companion.
+ * By default, arming is blocked until the companion computer sends a
+ * COMMAND_LONG with VEHICLE_CMD_EXTERNAL_ACTIVATION and param1=1.
+ * The flight controller acknowledges receipt immediately with COMMAND_ACK.
+ * Set this parameter to 1 to bypass the external activation requirement
+ * and allow arming even if no activation command is received from the
+ * companion.
  *
  * @group Commander
  * @boolean
