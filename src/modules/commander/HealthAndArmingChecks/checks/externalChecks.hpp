@@ -77,6 +77,7 @@ private:
 	static constexpr bool COMPANION_ACTIVATION_REQUIRED = true;
 
 	void checkNonRegisteredModes(const Context &context, Report &reporter) const;
+	void restoreCompanionActivationFromParam();
 
 	bool registrationValid(int reg_idx) const { return ((1u << reg_idx) & _active_registrations_mask) != 0; }
 
@@ -100,6 +101,7 @@ private:
 		bool active{false};
 		int32_t request_id{0};
 	} _activation_status_state {};
+	bool _companion_activation_restored{false};
 
 	uint8_t _first_external_nav_state = vehicle_status_s::NAVIGATION_STATE_MAX;
 	uint8_t _last_external_nav_state = vehicle_status_s::NAVIGATION_STATE_MAX;
@@ -116,6 +118,7 @@ private:
 	uORB::Publication<arming_check_request_s> _arming_check_request_pub{ORB_ID(arming_check_request)};
 
 	DEFINE_PARAMETERS_CUSTOM_PARENT(HealthAndArmingCheckBase,
-					(ParamInt<px4::params::COM_ACT_UNLOCK>) _param_com_act_unlock
+					(ParamInt<px4::params::COM_ACT_UNLOCK>) _param_com_act_unlock,
+					(ParamInt<px4::params::COM_ACT_STATE>) _param_com_act_state
 				       );
 };
