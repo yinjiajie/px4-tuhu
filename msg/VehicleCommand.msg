@@ -99,6 +99,7 @@ uint16 VEHICLE_CMD_DO_VTOL_TRANSITION = 3000    	# Command VTOL transition
 uint16 VEHICLE_CMD_ARM_AUTHORIZATION_REQUEST = 3001	# Request arm authorization
 uint16 VEHICLE_CMD_PAYLOAD_PREPARE_DEPLOY = 30001	# Prepare a payload deployment in the flight plan
 uint16 VEHICLE_CMD_PAYLOAD_CONTROL_DEPLOY = 30002	# Control a pre-programmed payload deployment
+uint16 VEHICLE_CMD_EXTERNAL_ACTIVATION = 31010		# Uses MAV_CMD_USER_1. |Activation state, 0=inactive 1=active|Request ID provided by the companion computer|Empty|Empty|Empty|Empty|Empty| The flight controller replies immediately with COMMAND_ACK to confirm receipt and echoes the request ID in COMMAND_ACK.result_param2.
 uint16 VEHICLE_CMD_FIXED_MAG_CAL_YAW = 42006            # Magnetometer calibration based on provided known yaw. This allows for fast calibration using WMM field tables in the vehicle, given only the known yaw of the vehicle. If Latitude and longitude are both zero then use the current vehicle location.
 uint16 VEHICLE_CMD_DO_WINCH = 42600			# Command to operate winch.
 

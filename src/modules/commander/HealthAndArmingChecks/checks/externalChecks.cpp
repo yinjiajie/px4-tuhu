@@ -106,6 +106,12 @@ bool ExternalChecks::isUnresponsive(int registration_id)
 	return false;
 }
 
+void ExternalChecks::setCompanionActivation(bool active, int32_t request_id)
+{
+	_activation_status_state.valid = true;
+	_activation_status_state.active = active;
+	_activation_status_state.request_id = request_id;
+}
 
 void ExternalChecks::checkAndReport(const Context &context, Report &reporter)
 {
@@ -240,16 +246,6 @@ void ExternalChecks::checkAndReport(const Context &context, Report &reporter)
 void ExternalChecks::update()
 {
 	const hrt_abstime now = hrt_absolute_time();
-
-	activation_status_s activation_status;
-	int max_num_activation_updates = activation_status_s::ORB_QUEUE_LENGTH;
-
-	while (_activation_status_sub.update(&activation_status) && --max_num_activation_updates >= 0) {
-		_activation_status_state.valid = true;
-		_activation_status_state.active = activation_status.active;
-		_activation_status_state.request_id = activation_status.request_id;
-		_param_com_act_unlock.commit_no_notification(activation_status.active ? 1 : 0);
-	}
 
 	// Check for incoming replies
 	arming_check_reply_s reply;
