@@ -106,15 +106,41 @@ bool ExternalChecks::isUnresponsive(int registration_id)
 	return false;
 }
 
+void ExternalChecks::restoreCompanionActivationFromParam()
+{
+	if (_companion_activation_restored) {
+		return;
+	}
+
+	_companion_activation_restored = true;
+
+	const int32_t stored_state = _param_com_act_state.get();
+
+	if (stored_state == 0 || stored_state == 1) {
+		_activation_status_state.valid = true;
+		_activation_status_state.active = stored_state == 1;
+		_activation_status_state.request_id = 0;
+	}
+}
+
 void ExternalChecks::setCompanionActivation(bool active, int32_t request_id)
 {
+	restoreCompanionActivationFromParam();
+
 	_activation_status_state.valid = true;
 	_activation_status_state.active = active;
 	_activation_status_state.request_id = request_id;
+
+	const int32_t stored_state = active ? 1 : 0;
+
+	if (_param_com_act_state.get() != stored_state) {
+		_param_com_act_state.commit_no_notification(stored_state);
+	}
 }
 
 void ExternalChecks::checkAndReport(const Context &context, Report &reporter)
 {
+	restoreCompanionActivationFromParam();
 	checkNonRegisteredModes(context, reporter);
 
 	if (COMPANION_ACTIVATION_REQUIRED) {
@@ -245,6 +271,8 @@ void ExternalChecks::checkAndReport(const Context &context, Report &reporter)
 
 void ExternalChecks::update()
 {
+	restoreCompanionActivationFromParam();
+
 	const hrt_abstime now = hrt_absolute_time();
 
 	// Check for incoming replies

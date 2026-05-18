@@ -757,6 +757,22 @@ PARAM_DEFINE_INT32(COM_ARM_CHK_ESCS, 0);
 PARAM_DEFINE_INT32(COM_ACT_UNLOCK, 0);
 
 /**
+ * Stored companion activation state
+ *
+ * Stores the last activation state reported by the RK3588 companion computer
+ * via COMMAND_LONG with VEHICLE_CMD_EXTERNAL_ACTIVATION. On boot, the flight
+ * controller restores this value and uses it until the companion computer
+ * sends an updated activation command.
+ *
+ * @value -1 Unknown
+ * @value 0 Inactive
+ * @value 1 Active
+ *
+ * @group Commander
+ */
+PARAM_DEFINE_INT32(COM_ACT_STATE, -1);
+
+/**
  * Condition to enter prearmed mode
  *
  * Condition to enter the prearmed state, an intermediate state between disarmed and armed
