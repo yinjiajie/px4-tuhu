@@ -65,19 +65,19 @@ param set PWM_MAIN_MAX2 1900
 param set PWM_MAIN_MAX3 1900
 param set PWM_MAIN_MAX4 1900
 
-param set EKF2_OF_POS_X 0.16
-param set EKF2_OF_POS_Y 0.025
-param set EKF2_OF_POS_Z 0.09
+param set EKF2_OF_POS_X 0.12
+param set EKF2_OF_POS_Y 0
+param set EKF2_OF_POS_Z 0.03
 
-param set EKF2_IMU_POS_X 0.03
-param set EKF2_IMU_POS_Y 0
-param set EKF2_IMU_POS_Z -0.02
+param set EKF2_IMU_POS_X -0.02
+param set EKF2_IMU_POS_Y 0.02
+param set EKF2_IMU_POS_Z -0.05
 
 param set EKF2_GPS_POS_X -0.08
 param set EKF2_GPS_POS_Y 0.03
 param set EKF2_GPS_POS_Z -0.02
 
-param set EKF2_GPS_CTRL 7
+#param set EKF2_GPS_CTRL 7
 
 param set COM_RCL_EXCEPT 7
 param set NAV_RCL_ACT 1
@@ -93,11 +93,11 @@ param set MIS_DIST_1WP 10000
 
 param set SDLOG_UTC_OFFSET 480
 
-param set MAV_1_CONFIG 102
+#param set MAV_1_CONFIG 102
 
 
-param set MAV_2_CONFIG 104
-param set MAV_2_MODE 2
+#param set MAV_2_CONFIG 104
+#param set MAV_2_MODE 2
 
 param set COM_FLTT_LOW_ACT 1
 param set COM_QC_ACT 2
