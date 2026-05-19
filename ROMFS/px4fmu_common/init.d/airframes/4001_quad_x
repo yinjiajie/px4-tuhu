@@ -98,9 +98,11 @@ param set MAV_1_CONFIG 102
 
 param set MAV_2_CONFIG 104
 param set MAV_2_MODE 2
-param set SER_TEL4_BAUD 921600
+#param set SER_TEL4_BAUD 921600
 
 param set COM_FLTT_LOW_ACT 1
 param set COM_QC_ACT 2
 
 param set EKF2_RNG_A_HMAX 5
+
+param set MPC_TILTMAX_AIR 25
