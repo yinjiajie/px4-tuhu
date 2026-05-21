@@ -87,9 +87,25 @@ void Ekf::fuseHorizontalPosition(estimator_aid_source2d_s &aid_src)
 		aid_src.time_last_fuse = _time_delayed_us;
 
 		_time_last_hor_pos_fuse = _time_delayed_us;
+		_last_hor_pos_fuse_failed = false;
 
 	} else {
 		aid_src.fused = false;
+
+		if (!_last_hor_pos_fuse_failed
+		    && isTimedOut(_time_last_hor_pos_fuse, _params.no_aid_timeout_max / 2)) {
+			ECL_WARN("GNSS pos fuse failed: delayed=%.3fs rejected=%d innov=(%.3f,%.3f) test=(%.3f,%.3f) obs_var=(%.3f,%.3f)",
+				 (double)_time_delayed_us / 1e6,
+				 (int)aid_src.innovation_rejected,
+				 (double)aid_src.innovation[0],
+				 (double)aid_src.innovation[1],
+				 (double)aid_src.test_ratio[0],
+				 (double)aid_src.test_ratio[1],
+				 (double)aid_src.observation_variance[0],
+				 (double)aid_src.observation_variance[1]);
+		}
+
+		_last_hor_pos_fuse_failed = true;
 	}
 }
 

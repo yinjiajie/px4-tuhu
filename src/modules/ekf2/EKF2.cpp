@@ -2406,8 +2406,39 @@ void EKF2::UpdateGpsSample(ekf2_timestamps_s &ekf2_timestamps)
 			return; //TODO: change and set to NAN
 		}
 
+		// Some receivers/drivers publish position/velocity and time information in separate messages.
+		// Use the relative timing correction when available so the EKF consumes the GNSS sample closer
+		// to the measurement time instead of the position sentence parse time. Reject corrections that
+		// are larger than about 1.5 measurement intervals to avoid cross-cycle timestamp pairing.
+		uint64_t gps_sample_time_us = vehicle_gps_position.timestamp;
+		const uint64_t previous_vehicle_gps_timestamp = _last_vehicle_gps_position_timestamp;
+		_last_vehicle_gps_position_timestamp = vehicle_gps_position.timestamp;
+
+		if (vehicle_gps_position.timestamp_time_relative != 0) {
+			bool relative_time_trusted = true;
+
+			if ((previous_vehicle_gps_timestamp > 0) && (vehicle_gps_position.timestamp > previous_vehicle_gps_timestamp)) {
+				const uint64_t gps_interval_us = vehicle_gps_position.timestamp - previous_vehicle_gps_timestamp;
+				const uint64_t max_trusted_relative_time_us = gps_interval_us + gps_interval_us / 2;
+				const int64_t relative_time_us = static_cast<int64_t>(vehicle_gps_position.timestamp_time_relative);
+				const uint64_t abs_relative_time_us = (relative_time_us >= 0) ? static_cast<uint64_t>(relative_time_us) :
+						static_cast<uint64_t>(-relative_time_us);
+
+				relative_time_trusted = abs_relative_time_us <= max_trusted_relative_time_us;
+			}
+
+			if (relative_time_trusted) {
+				const int64_t corrected_time_us = static_cast<int64_t>(vehicle_gps_position.timestamp)
+							  + static_cast<int64_t>(vehicle_gps_position.timestamp_time_relative);
+
+				if (corrected_time_us > 0) {
+					gps_sample_time_us = static_cast<uint64_t>(corrected_time_us);
+				}
+			}
+		}
+
 		gnssSample gnss_sample{
-			.time_us = vehicle_gps_position.timestamp,
+			.time_us = gps_sample_time_us,
 			.lat = vehicle_gps_position.latitude_deg,
 			.lon = vehicle_gps_position.longitude_deg,
 			.alt = static_cast<float>(vehicle_gps_position.altitude_msl_m),

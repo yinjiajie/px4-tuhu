@@ -608,6 +608,27 @@ void Ekf::updateHorizontalDeadReckoningstatus()
 
 	_control_status.flags.inertial_dead_reckoning = !velPosAiding && !optFlowAiding && !airDataAiding;
 
+	if (_control_status.flags.inertial_dead_reckoning != _last_inertial_dead_reckoning) {
+		ECL_WARN("inertial DR %s: delayed=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs gps_push_age=%.3fs gps_ready=%d gps_checks=%d pos_fused=%d pos_rej=%d pos_test=(%.3f,%.3f) vel_fused=%d vel_rej=%d vel_test=(%.3f,%.3f,%.3f)",
+			 _control_status.flags.inertial_dead_reckoning ? "ENTER" : "EXIT",
+			 (double)_time_delayed_us / 1e6,
+			 (double)(_time_delayed_us - _time_last_hor_pos_fuse) / 1e6,
+			 (double)(_time_delayed_us - _time_last_hor_vel_fuse) / 1e6,
+			 (double)(_time_delayed_us - _time_last_gps_buffer_push) / 1e6,
+			 (int)_gps_data_ready,
+			 (int)_gps_checks_passed,
+			 (int)_aid_src_gnss_pos.fused,
+			 (int)_aid_src_gnss_pos.innovation_rejected,
+			 (double)_aid_src_gnss_pos.test_ratio[0],
+			 (double)_aid_src_gnss_pos.test_ratio[1],
+			 (int)_aid_src_gnss_vel.fused,
+			 (int)_aid_src_gnss_vel.innovation_rejected,
+			 (double)_aid_src_gnss_vel.test_ratio[0],
+			 (double)_aid_src_gnss_vel.test_ratio[1],
+			 (double)_aid_src_gnss_vel.test_ratio[2]);
+		_last_inertial_dead_reckoning = _control_status.flags.inertial_dead_reckoning;
+	}
+
 	if (!_control_status.flags.inertial_dead_reckoning) {
 		if (_time_delayed_us > _params.no_aid_timeout_max) {
 			_time_last_horizontal_aiding = _time_delayed_us - _params.no_aid_timeout_max;

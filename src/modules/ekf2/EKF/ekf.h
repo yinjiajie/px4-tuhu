@@ -568,6 +568,12 @@ private:
 	uint64_t _time_last_ver_vel_fuse{0};	///< time the last fusion of verticalvelocity measurements was performed (uSec)
 	uint64_t _time_last_heading_fuse{0};
 
+	bool _last_gps_sample_check_passed{true};
+	bool _last_inertial_dead_reckoning{true};
+	bool _last_gps_data_not_ready_while_fusing{false};
+	bool _last_hor_pos_fuse_failed{false};
+	bool _last_hor_vel_fuse_failed{false};
+
 	Vector3f _last_known_pos{};		///< last known local position vector (m)
 
 	uint64_t _time_acc_bias_check{0};	///< last time the  accel bias check passed (uSec)

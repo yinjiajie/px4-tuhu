@@ -62,8 +62,10 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 
 	if (_gps_data_ready) {
 		const gnssSample &gnss_sample = _gps_sample_delayed;
+		const bool sample_checks_passed = runGnssChecks(gnss_sample)
+					  && isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us / 2);
 
-		if (runGnssChecks(gnss_sample) && isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us / 2)) {
+		if (sample_checks_passed) {
 			if (isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us)) {
 				// First time checks are passing, latching.
 				_gps_checks_passed = true;
@@ -75,12 +77,23 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 			// Skip this sample
 			_gps_data_ready = false;
 
+			if (_last_gps_sample_check_passed) {
+				ECL_WARN("GPS sample skipped: delayed=%.3fs sample=%.3fs pass=%d last_pass_age=%.3fs last_fail_age=%.3fs",
+					 (double)_time_delayed_us / 1e6,
+					 (double)gnss_sample.time_us / 1e6,
+					 (int)sample_checks_passed,
+					 (double)(_time_delayed_us - _last_gps_pass_us) / 1e6,
+					 (double)(_time_delayed_us - _last_gps_fail_us) / 1e6);
+			}
+
 			if (_control_status.flags.gps && isTimedOut(_last_gps_pass_us, _params.reset_timeout_max)) {
 				stopGpsFusion();
 				_warning_events.flags.gps_quality_poor = true;
 				ECL_WARN("GPS quality poor - stopping use");
 			}
 		}
+
+		_last_gps_sample_check_passed = sample_checks_passed;
 
 		if (_pos_ref.isInitialized()) {
 			updateGnssPos(gnss_sample, _aid_src_gnss_pos);
@@ -89,7 +102,18 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 		updateGnssVel(gnss_sample, _aid_src_gnss_vel);
 
 	} else if (_control_status.flags.gps) {
-		if (!isNewestSampleRecent(_time_last_gps_buffer_push, _params.reset_timeout_max)) {
+		if (isNewestSampleRecent(_time_last_gps_buffer_push, 2 * GNSS_MAX_INTERVAL)) {
+			if (!_last_gps_data_not_ready_while_fusing) {
+				ECL_WARN("GPS data not ready at horizon: delayed=%.3fs gps_push_age=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs",
+					 (double)_time_delayed_us / 1e6,
+					 (double)(_time_delayed_us - _time_last_gps_buffer_push) / 1e6,
+					 (double)(_time_delayed_us - _time_last_hor_pos_fuse) / 1e6,
+					 (double)(_time_delayed_us - _time_last_hor_vel_fuse) / 1e6);
+			}
+
+			_last_gps_data_not_ready_while_fusing = true;
+
+		} else if (!isNewestSampleRecent(_time_last_gps_buffer_push, _params.reset_timeout_max)) {
 			stopGpsFusion();
 			_warning_events.flags.gps_data_stopped = true;
 			ECL_WARN("GPS data stopped");
@@ -97,6 +121,8 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 	}
 
 	if (_gps_data_ready) {
+		_last_gps_data_not_ready_while_fusing = false;
+
 #if defined(CONFIG_EKF2_GNSS_YAW)
 		const gnssSample &gnss_sample = _gps_sample_delayed;
 		controlGpsYawFusion(gnss_sample);

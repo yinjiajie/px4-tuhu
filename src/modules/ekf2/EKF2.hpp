@@ -455,35 +455,36 @@ private:
 	uORB::PublicationMulti<wind_s>              _wind_pub;
 #endif // CONFIG_EKF2_WIND
 
-#if defined(CONFIG_EKF2_GNSS)
-	uint64_t _gps_time_usec {0};
-	int32_t _gps_alttitude_ellipsoid{0};			///< altitude in 1E-3 meters (millimeters) above ellipsoid
-	uint64_t _gps_alttitude_ellipsoid_previous_timestamp{0}; ///< storage for previous timestamp to compute dt
-	float   _wgs84_hgt_offset = 0;  ///< height offset between AMSL and WGS84
+	#if defined(CONFIG_EKF2_GNSS)
+		uint64_t _gps_time_usec {0};
+		uint64_t _last_vehicle_gps_position_timestamp{0};
+		int32_t _gps_alttitude_ellipsoid{0};			///< altitude in 1E-3 meters (millimeters) above ellipsoid
+		uint64_t _gps_alttitude_ellipsoid_previous_timestamp{0}; ///< storage for previous timestamp to compute dt
+		float   _wgs84_hgt_offset = 0;  ///< height offset between AMSL and WGS84
 
-	hrt_abstime _last_gps_status_published{0};
+		hrt_abstime _last_gps_status_published{0};
 
-	hrt_abstime _status_gnss_hgt_pub_last{0};
-	hrt_abstime _status_gnss_pos_pub_last{0};
-	hrt_abstime _status_gnss_vel_pub_last{0};
+		hrt_abstime _status_gnss_hgt_pub_last{0};
+		hrt_abstime _status_gnss_pos_pub_last{0};
+		hrt_abstime _status_gnss_vel_pub_last{0};
 
-	float _last_gnss_hgt_bias_published{};
+		float _last_gnss_hgt_bias_published{};
 
-	uORB::Subscription _vehicle_gps_position_sub{ORB_ID(vehicle_gps_position)};
+		uORB::Subscription _vehicle_gps_position_sub{ORB_ID(vehicle_gps_position)};
 
-	uORB::PublicationMulti<estimator_bias_s> _estimator_gnss_hgt_bias_pub{ORB_ID(estimator_gnss_hgt_bias)};
-	uORB::PublicationMulti<estimator_gps_status_s> _estimator_gps_status_pub{ORB_ID(estimator_gps_status)};
-	uORB::PublicationMulti<estimator_aid_source1d_s> _estimator_aid_src_gnss_hgt_pub{ORB_ID(estimator_aid_src_gnss_hgt)};
-	uORB::PublicationMulti<estimator_aid_source2d_s> _estimator_aid_src_gnss_pos_pub{ORB_ID(estimator_aid_src_gnss_pos)};
-	uORB::PublicationMulti<estimator_aid_source3d_s> _estimator_aid_src_gnss_vel_pub{ORB_ID(estimator_aid_src_gnss_vel)};
+		uORB::PublicationMulti<estimator_bias_s> _estimator_gnss_hgt_bias_pub{ORB_ID(estimator_gnss_hgt_bias)};
+		uORB::PublicationMulti<estimator_gps_status_s> _estimator_gps_status_pub{ORB_ID(estimator_gps_status)};
+		uORB::PublicationMulti<estimator_aid_source1d_s> _estimator_aid_src_gnss_hgt_pub{ORB_ID(estimator_aid_src_gnss_hgt)};
+		uORB::PublicationMulti<estimator_aid_source2d_s> _estimator_aid_src_gnss_pos_pub{ORB_ID(estimator_aid_src_gnss_pos)};
+		uORB::PublicationMulti<estimator_aid_source3d_s> _estimator_aid_src_gnss_vel_pub{ORB_ID(estimator_aid_src_gnss_vel)};
 
-	uORB::PublicationMulti<yaw_estimator_status_s> _yaw_est_pub{ORB_ID(yaw_estimator_status)};
+		uORB::PublicationMulti<yaw_estimator_status_s> _yaw_est_pub{ORB_ID(yaw_estimator_status)};
 
-# if defined(CONFIG_EKF2_GNSS_YAW)
-	hrt_abstime _status_gnss_yaw_pub_last {0};
-	uORB::PublicationMulti<estimator_aid_source1d_s> _estimator_aid_src_gnss_yaw_pub {ORB_ID(estimator_aid_src_gnss_yaw)};
-# endif // CONFIG_EKF2_GNSS_YAW
-#endif // CONFIG_EKF2_GNSS
+	# if defined(CONFIG_EKF2_GNSS_YAW)
+		hrt_abstime _status_gnss_yaw_pub_last {0};
+		uORB::PublicationMulti<estimator_aid_source1d_s> _estimator_aid_src_gnss_yaw_pub {ORB_ID(estimator_aid_src_gnss_yaw)};
+	# endif // CONFIG_EKF2_GNSS_YAW
+	#endif // CONFIG_EKF2_GNSS
 
 #if defined(CONFIG_EKF2_GRAVITY_FUSION)
 	hrt_abstime _status_gravity_pub_last {0};
