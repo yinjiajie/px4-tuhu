@@ -34,11 +34,19 @@
 px4_add_module(
 	MODULE modules__parachute_rs485
 	MAIN parachute_rs485
+	COMPILE_FLAGS
+		-Wno-address-of-packed-member
+		-Wno-cast-align
+	INCLUDES
+		${CMAKE_BINARY_DIR}/mavlink
+		${CMAKE_BINARY_DIR}/mavlink/development
+		${CMAKE_BINARY_DIR}/mavlink/common
+		${CMAKE_BINARY_DIR}/mavlink/standard
 	SRCS
 		parachute_rs485.cpp
 	MODULE_CONFIG
 		module.yaml
 	DEPENDS
-		mavlink_c
+		mavlink_c_generate
 		px4_work_queue
 )
