@@ -2414,6 +2414,28 @@ void EKF2::UpdateGpsSample(ekf2_timestamps_s &ekf2_timestamps)
 		const uint64_t previous_vehicle_gps_timestamp = _last_vehicle_gps_position_timestamp;
 		_last_vehicle_gps_position_timestamp = vehicle_gps_position.timestamp;
 
+		if ((previous_vehicle_gps_timestamp > 0) && (vehicle_gps_position.timestamp >= previous_vehicle_gps_timestamp)) {
+			const uint64_t gps_publish_interval_us = vehicle_gps_position.timestamp - previous_vehicle_gps_timestamp;
+
+			if (gps_publish_interval_us == 0) {
+				PX4_WARN("GPS duplicate publish timestamp: ts=%.3fs fix=%u nsat=%u eph=%.2f sacc=%.3f",
+					 (double)vehicle_gps_position.timestamp / 1e6,
+					 vehicle_gps_position.fix_type,
+					 vehicle_gps_position.satellites_used,
+					 (double)vehicle_gps_position.eph,
+					 (double)vehicle_gps_position.s_variance_m_s);
+
+			} else if (gps_publish_interval_us > 300_ms) {
+				PX4_WARN("GPS publish gap: dt=%.3fs ts=%.3fs fix=%u nsat=%u eph=%.2f sacc=%.3f",
+					 (double)gps_publish_interval_us / 1e6,
+					 (double)vehicle_gps_position.timestamp / 1e6,
+					 vehicle_gps_position.fix_type,
+					 vehicle_gps_position.satellites_used,
+					 (double)vehicle_gps_position.eph,
+					 (double)vehicle_gps_position.s_variance_m_s);
+			}
+		}
+
 		if (vehicle_gps_position.timestamp_time_relative != 0) {
 			bool relative_time_trusted = true;
 

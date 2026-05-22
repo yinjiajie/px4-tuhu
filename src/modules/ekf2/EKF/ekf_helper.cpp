@@ -609,7 +609,7 @@ void Ekf::updateHorizontalDeadReckoningstatus()
 	_control_status.flags.inertial_dead_reckoning = !velPosAiding && !optFlowAiding && !airDataAiding;
 
 	if (_control_status.flags.inertial_dead_reckoning != _last_inertial_dead_reckoning) {
-		ECL_WARN("inertial DR %s: delayed=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs gps_push_age=%.3fs gps_ready=%d gps_checks=%d pos_fused=%d pos_rej=%d pos_test=(%.3f,%.3f) vel_fused=%d vel_rej=%d vel_test=(%.3f,%.3f,%.3f)",
+		PX4_WARN("inertial DR %s: delayed=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs gps_push_age=%.3fs gps_ready=%d gps_checks=%d pos_fused=%d pos_rej=%d pos_test=(%.3f,%.3f) vel_fused=%d vel_rej=%d vel_test=(%.3f,%.3f,%.3f)",
 			 _control_status.flags.inertial_dead_reckoning ? "ENTER" : "EXIT",
 			 (double)_time_delayed_us / 1e6,
 			 (double)(_time_delayed_us - _time_last_hor_pos_fuse) / 1e6,

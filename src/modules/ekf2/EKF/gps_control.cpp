@@ -78,7 +78,7 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 			_gps_data_ready = false;
 
 			if (_last_gps_sample_check_passed) {
-				ECL_WARN("GPS sample skipped: delayed=%.3fs sample=%.3fs pass=%d last_pass_age=%.3fs last_fail_age=%.3fs",
+				PX4_WARN("GPS sample skipped: delayed=%.3fs sample=%.3fs pass=%d last_pass_age=%.3fs last_fail_age=%.3fs",
 					 (double)_time_delayed_us / 1e6,
 					 (double)gnss_sample.time_us / 1e6,
 					 (int)sample_checks_passed,
@@ -104,11 +104,19 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 	} else if (_control_status.flags.gps) {
 		if (isNewestSampleRecent(_time_last_gps_buffer_push, 2 * GNSS_MAX_INTERVAL)) {
 			if (!_last_gps_data_not_ready_while_fusing) {
-				ECL_WARN("GPS data not ready at horizon: delayed=%.3fs gps_push_age=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs",
+				const double newest_sample_age = (_gps_buffer != nullptr)
+							  ? (double)(_gps_buffer->get_newest().time_us - _time_delayed_us) / 1e6
+							  : (double)NAN;
+				const double oldest_sample_age = (_gps_buffer != nullptr)
+							  ? (double)(_gps_buffer->get_oldest().time_us - _time_delayed_us) / 1e6
+							  : (double)NAN;
+				PX4_WARN("GPS data not ready at horizon: delayed=%.3fs gps_push_age=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs oldest_rel=%.3fs newest_rel=%.3fs",
 					 (double)_time_delayed_us / 1e6,
 					 (double)(_time_delayed_us - _time_last_gps_buffer_push) / 1e6,
 					 (double)(_time_delayed_us - _time_last_hor_pos_fuse) / 1e6,
-					 (double)(_time_delayed_us - _time_last_hor_vel_fuse) / 1e6);
+					 (double)(_time_delayed_us - _time_last_hor_vel_fuse) / 1e6,
+					 (double)oldest_sample_age,
+					 (double)newest_sample_age);
 			}
 
 			_last_gps_data_not_ready_while_fusing = true;
