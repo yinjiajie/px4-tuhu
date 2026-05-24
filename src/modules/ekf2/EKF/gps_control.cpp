@@ -46,6 +46,10 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 		return;
 	}
 
+	const double gps_push_age = (_time_last_gps_buffer_push > 0)
+				    ? (double)((int64_t)_time_delayed_us - (int64_t)_time_last_gps_buffer_push) / 1e6
+				    : (double)NAN;
+
 	if (!gyro_bias_inhibited()) {
 		_yawEstimator.setGyroBias(getGyroBias(), _control_status.flags.vehicle_at_rest);
 	}
@@ -62,6 +66,24 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 
 	if (_gps_data_ready) {
 		const gnssSample &gnss_sample = _gps_sample_delayed;
+		static uint64_t last_gps_horizon_pop_diag_log_us{0};
+
+		if ((last_gps_horizon_pop_diag_log_us == 0) || (_time_delayed_us > (last_gps_horizon_pop_diag_log_us + 1000000ULL))) {
+			const double sample_rel_s = (double)((int64_t)gnss_sample.time_us - (int64_t)_time_delayed_us) / 1e6;
+			const double newest_sample_age = (_gps_buffer != nullptr)
+							  ? (double)((int64_t)_gps_buffer->get_newest().time_us - (int64_t)_time_delayed_us) / 1e6
+							  : (double)NAN;
+			const double oldest_sample_age = (_gps_buffer != nullptr)
+							  ? (double)((int64_t)_gps_buffer->get_oldest().time_us - (int64_t)_time_delayed_us) / 1e6
+							  : (double)NAN;
+			PX4_WARN("GPS horizon pop: delayed=%.3fs sample_rel=%.3fs oldest_rel=%.3fs newest_rel=%.3fs",
+				 (double)_time_delayed_us / 1e6,
+				 sample_rel_s,
+				 oldest_sample_age,
+				 newest_sample_age);
+			last_gps_horizon_pop_diag_log_us = _time_delayed_us;
+		}
+
 		const bool sample_checks_passed = runGnssChecks(gnss_sample)
 					  && isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us / 2);
 
@@ -112,7 +134,7 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 							  : (double)NAN;
 				PX4_WARN("GPS data not ready at horizon: delayed=%.3fs gps_push_age=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs oldest_rel=%.3fs newest_rel=%.3fs",
 					 (double)_time_delayed_us / 1e6,
-					 (double)(_time_delayed_us - _time_last_gps_buffer_push) / 1e6,
+					 gps_push_age,
 					 (double)(_time_delayed_us - _time_last_hor_pos_fuse) / 1e6,
 					 (double)(_time_delayed_us - _time_last_hor_vel_fuse) / 1e6,
 					 (double)oldest_sample_age,

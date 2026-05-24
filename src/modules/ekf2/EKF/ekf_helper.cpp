@@ -607,6 +607,9 @@ void Ekf::updateHorizontalDeadReckoningstatus()
 #endif // CONFIG_EKF2_AIRSPEED
 
 	_control_status.flags.inertial_dead_reckoning = !velPosAiding && !optFlowAiding && !airDataAiding;
+	const double gps_push_age = (_time_last_gps_buffer_push > 0)
+				    ? (double)((int64_t)_time_delayed_us - (int64_t)_time_last_gps_buffer_push) / 1e6
+				    : (double)NAN;
 
 	if (_control_status.flags.inertial_dead_reckoning != _last_inertial_dead_reckoning) {
 		PX4_WARN("inertial DR %s: delayed=%.3fs hor_pos_age=%.3fs hor_vel_age=%.3fs gps_push_age=%.3fs gps_ready=%d gps_checks=%d pos_fused=%d pos_rej=%d pos_test=(%.3f,%.3f) vel_fused=%d vel_rej=%d vel_test=(%.3f,%.3f,%.3f)",
@@ -614,7 +617,7 @@ void Ekf::updateHorizontalDeadReckoningstatus()
 			 (double)_time_delayed_us / 1e6,
 			 (double)(_time_delayed_us - _time_last_hor_pos_fuse) / 1e6,
 			 (double)(_time_delayed_us - _time_last_hor_vel_fuse) / 1e6,
-			 (double)(_time_delayed_us - _time_last_gps_buffer_push) / 1e6,
+			 gps_push_age,
 			 (int)_gps_data_ready,
 			 (int)_gps_checks_passed,
 			 (int)_aid_src_gnss_pos.fused,

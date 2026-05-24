@@ -2413,6 +2413,7 @@ void EKF2::UpdateGpsSample(ekf2_timestamps_s &ekf2_timestamps)
 		uint64_t gps_sample_time_us = vehicle_gps_position.timestamp;
 		const uint64_t previous_vehicle_gps_timestamp = _last_vehicle_gps_position_timestamp;
 		_last_vehicle_gps_position_timestamp = vehicle_gps_position.timestamp;
+		static uint64_t last_gps_sample_diag_log_us{0};
 
 		if ((previous_vehicle_gps_timestamp > 0) && (vehicle_gps_position.timestamp >= previous_vehicle_gps_timestamp)) {
 			const uint64_t gps_publish_interval_us = vehicle_gps_position.timestamp - previous_vehicle_gps_timestamp;
@@ -2457,6 +2458,22 @@ void EKF2::UpdateGpsSample(ekf2_timestamps_s &ekf2_timestamps)
 					gps_sample_time_us = static_cast<uint64_t>(corrected_time_us);
 				}
 			}
+		}
+
+		if ((last_gps_sample_diag_log_us == 0) || (vehicle_gps_position.timestamp > (last_gps_sample_diag_log_us + 1_s))) {
+			const double publish_interval_s = (previous_vehicle_gps_timestamp > 0)
+							  ? (double)(vehicle_gps_position.timestamp - previous_vehicle_gps_timestamp) / 1e6
+							  : (double)NAN;
+			PX4_WARN("GPS sample to EKF: pub=%.3fs dt=%.3fs rel=%d final=%.3fs fix=%u nsat=%u eph=%.2f sacc=%.3f",
+				 (double)vehicle_gps_position.timestamp / 1e6,
+				 publish_interval_s,
+				 (int)vehicle_gps_position.timestamp_time_relative,
+				 (double)gps_sample_time_us / 1e6,
+				 vehicle_gps_position.fix_type,
+				 vehicle_gps_position.satellites_used,
+				 (double)vehicle_gps_position.eph,
+				 (double)vehicle_gps_position.s_variance_m_s);
+			last_gps_sample_diag_log_us = vehicle_gps_position.timestamp;
 		}
 
 		gnssSample gnss_sample{

@@ -43,6 +43,7 @@
 #include "estimator_interface.h"
 
 #include <mathlib/mathlib.h>
+#include <px4_platform_common/log.h>
 
 EstimatorInterface::~EstimatorInterface()
 {
@@ -153,6 +154,8 @@ void EstimatorInterface::setGpsData(const gnssSample &gnss_sample)
 		return;
 	}
 
+	static uint64_t last_gps_buffer_diag_log_us{0};
+
 	// Allocate the required buffer size if not previously done
 	if (_gps_buffer == nullptr) {
 		_gps_buffer = new RingBuffer<gnssSample>(_obs_buffer_length);
@@ -178,6 +181,18 @@ void EstimatorInterface::setGpsData(const gnssSample &gnss_sample)
 		_gps_buffer->push(gnss_sample_new);
 		_time_last_gps_buffer_push = _time_latest_us;
 
+		if ((last_gps_buffer_diag_log_us == 0) || (_time_latest_us > (last_gps_buffer_diag_log_us + 1000000ULL))) {
+			const double newest_rel_s = (double)((int64_t)_gps_buffer->get_newest().time_us - (int64_t)_time_latest_us) / 1e6;
+			const double oldest_rel_s = (double)((int64_t)_gps_buffer->get_oldest().time_us - (int64_t)_time_latest_us) / 1e6;
+			PX4_WARN("GPS buffer push: raw=%.3fs delayed=%.3fs latest=%.3fs newest_rel=%.3fs oldest_rel=%.3fs",
+				 (double)gnss_sample.time_us / 1e6,
+				 (double)gnss_sample_new.time_us / 1e6,
+				 (double)_time_latest_us / 1e6,
+				 newest_rel_s,
+				 oldest_rel_s);
+			last_gps_buffer_diag_log_us = _time_latest_us;
+		}
+
 #if defined(CONFIG_EKF2_GNSS_YAW)
 		if (PX4_ISFINITE(gnss_sample.yaw)) {
 			_time_last_gps_yaw_buffer_push = _time_latest_us;
@@ -185,7 +200,11 @@ void EstimatorInterface::setGpsData(const gnssSample &gnss_sample)
 #endif // CONFIG_EKF2_GNSS_YAW
 
 	} else {
-		ECL_WARN("GPS data too fast %" PRIi64 " < %" PRIu64 " + %d", time_us, _gps_buffer->get_newest().time_us, _min_obs_interval_us);
+		PX4_WARN("GPS buffer reject fast: delayed=%.3fs newest=%.3fs min=%.3fs raw=%.3fs",
+			 (double)time_us / 1e6,
+			 (double)_gps_buffer->get_newest().time_us / 1e6,
+			 (double)_min_obs_interval_us / 1e6,
+			 (double)gnss_sample.time_us / 1e6);
 	}
 }
 #endif // CONFIG_EKF2_GNSS
