@@ -71,6 +71,7 @@ bool FlightTaskAuto::activate(const trajectory_setpoint_s &last_setpoint)
 	_position_smoothing.reset(accel_prev, vel_prev, pos_prev);
 
 	_yaw_sp_prev = PX4_ISFINITE(last_setpoint.yaw) ? last_setpoint.yaw : _yaw;
+	_had_explicit_yaw_target = false;
 	_updateTrajConstraints();
 	_is_emergency_braking_active = false;
 	_time_last_cruise_speed_override = 0;
@@ -512,22 +513,31 @@ bool FlightTaskAuto::_evaluateTriplets()
 		}
 
 	} else {
+		const bool has_explicit_yaw_target = PX4_ISFINITE(_sub_triplet_setpoint.get().current.yaw);
+
 		if (!_is_yaw_good_for_control) {
 			_yaw_lock = false;
 			_yaw_setpoint = NAN;
 			_yawspeed_setpoint = 0.f;
+			_had_explicit_yaw_target = false;
 
-		} else if (PX4_ISFINITE(_sub_triplet_setpoint.get().current.yaw)) {
-			if (_type == WaypointType::loiter && _type_previous != WaypointType::loiter) {
-				// Entering loiter with an explicit yaw target should not introduce an extra slew from the previous mode.
+		} else if (has_explicit_yaw_target) {
+			const bool explicit_loiter_yaw_just_took_over = (_type == WaypointType::loiter)
+					&& ((_type_previous != WaypointType::loiter) || !_had_explicit_yaw_target);
+
+			if (explicit_loiter_yaw_just_took_over) {
+				// Reset the yaw slew state when loiter starts using an explicit yaw target.
+				// This also covers delayed triplet yaw updates after a failsafe mode switch.
 				_yaw_sp_prev = _sub_triplet_setpoint.get().current.yaw;
 				_yawspeed_filter.reset(0.f);
 			}
 
 			_yaw_setpoint = _sub_triplet_setpoint.get().current.yaw;
 			_yawspeed_setpoint = NAN;
+			_had_explicit_yaw_target = true;
 
 		} else {
+			_had_explicit_yaw_target = false;
 			_set_heading_from_mode();
 		}
 	}
