@@ -223,7 +223,6 @@ else
 			fi
 		fi
 
-		param set SYS_AUTOSTART 12001
 		. ${R}$AUTOSTART_PATH
 	fi
 	unset AUTOSTART_PATH

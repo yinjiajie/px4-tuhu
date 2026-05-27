@@ -3,6 +3,7 @@
 # board specific defaults
 #------------------------------------------------------------------------------
 
+param set SYS_AUTOSTART 12001
 
 param set-default BAT1_V_DIV 18.1
 param set-default BAT2_V_DIV 18.1
