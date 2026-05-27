@@ -139,3 +139,4 @@ param set IMU_GYRO_FFT_MIN 30
 param set IMU_GYRO_FFT_MAX 180
 
 param set EKF2_RNG_A_HMAX 5
+param set SENS_FLOW_MAXHGT 8
