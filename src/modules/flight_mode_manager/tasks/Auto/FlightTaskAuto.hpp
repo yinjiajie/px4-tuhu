@@ -137,6 +137,7 @@ protected:
 	float _yaw_sp_prev{NAN};
 	AlphaFilter<float> _yawspeed_filter;
 	bool _yaw_sp_aligned{false};
+	bool _had_explicit_yaw_target{false};
 
 	ObstacleAvoidance _obstacle_avoidance{this}; /**< class adjusting setpoints according to external avoidance module's input */
 
