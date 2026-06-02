@@ -166,6 +166,8 @@ private:
 
 	void updateControlMode();
 
+	bool parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const;
+
 	void send_parachute_command(uint8_t parachute_action, bool play_release_tune);
 	void get_parachute_state(float &height_above_takeoff, float &vertical_velocity);
 	void get_parachute_utc_time(float &utc_date, double &utc_time);
@@ -284,6 +286,8 @@ private:
 
 	bool _arm_tune_played{false};
 	bool _have_taken_off_since_arming{false};
+	bool _manual_lockdown_by_user{false};
+	bool _manual_lockdown_latched_attitude_failure{false};
 	bool _status_changed{true};
 	bool _last_parachute_action_valid{false};
 
@@ -356,6 +360,8 @@ private:
 		(ParamFloat<px4::params::COM_OBC_LOSS_T>)   _param_com_obc_loss_t,
 		(ParamInt<px4::params::COM_PREARM_MODE>)    _param_com_prearm_mode,
 		(ParamInt<px4::params::COM_RC_OVERRIDE>)    _param_com_rc_override,
+		(ParamFloat<px4::params::COM_LKDOWN_TKO>)   _param_com_lkdown_tko,
+		(ParamFloat<px4::params::COM_SPOOLUP_TIME>) _param_com_spoolup_time,
 		(ParamInt<px4::params::COM_FLIGHT_UUID>)    _param_flight_uuid,
 		(ParamInt<px4::params::COM_TAKEOFF_ACT>)    _param_takeoff_finished_action,
 		(ParamFloat<px4::params::COM_CPU_MAX>)      _param_com_cpu_max
