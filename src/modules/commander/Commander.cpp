@@ -100,6 +100,23 @@ static constexpr bool operator ==(const actuator_armed_s &a, const actuator_arme
 }
 static_assert(sizeof(actuator_armed_s) == 16, "actuator_armed equality operator review");
 
+bool Commander::parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const
+{
+	if (!isArmed() || _vehicle_status.armed_time == 0 || _vehicle_status.takeoff_time == 0 || _vehicle_land_detected.landed) {
+		return false;
+	}
+
+	const hrt_abstime early_takeoff_window = static_cast<hrt_abstime>(
+			(_param_com_lkdown_tko.get() + _param_com_spoolup_time.get()) * 1_s);
+
+	if (now < _vehicle_status.armed_time + early_takeoff_window) {
+		return false;
+	}
+
+	// The failure detector attitude bits are only set after FD_FAIL_*_TTRI hysteresis has elapsed.
+	return (_vehicle_status.failure_detector_status & (vehicle_status_s::FAILURE_ROLL | vehicle_status_s::FAILURE_PITCH)) != 0;
+}
+
 #if defined(BOARD_HAS_POWER_CONTROL)
 static orb_advert_t tune_control_pub = nullptr;
 
@@ -657,6 +674,9 @@ transition_result_t Commander::disarm(arm_disarm_reason_t calling_reason, bool f
 	_vehicle_status.takeoff_time = 0;
 
 	_have_taken_off_since_arming = false;
+	_manual_lockdown_by_user = false;
+	_manual_lockdown_latched_attitude_failure = false;
+	_actuator_armed.manual_lockdown = false;
 
 	_last_disarmed_timestamp = hrt_absolute_time();
 
@@ -1670,17 +1690,17 @@ void Commander::executeActionRequest(const action_request_s &action_request)
 		break;
 
 	case action_request_s::ACTION_UNKILL:
-		if (_actuator_armed.manual_lockdown) {
+		if (_manual_lockdown_by_user) {
 			mavlink_log_info(&_mavlink_log_pub, "Kill disengaged\t");
 			events::send(events::ID("commander_kill_sw_disengaged"), events::Log::Info, "Kill disengaged");
 			_status_changed = true;
-			_actuator_armed.manual_lockdown = false;
+			_manual_lockdown_by_user = false;
 		}
 
 		break;
 
 	case action_request_s::ACTION_KILL:
-		if (!_actuator_armed.manual_lockdown) {
+		if (!_manual_lockdown_by_user) {
 			const char kill_switch_string[] = "Kill engaged\t";
 			events::LogLevels log_levels{events::Log::Info};
 
@@ -1695,7 +1715,7 @@ void Commander::executeActionRequest(const action_request_s &action_request)
 			events::send(events::ID("commander_kill_sw_engaged"), log_levels, "Kill engaged");
 
 			_status_changed = true;
-			_actuator_armed.manual_lockdown = true;
+			_manual_lockdown_by_user = true;
 		}
 
 		break;
@@ -1903,9 +1923,14 @@ void Commander::run()
 		_actuator_armed.lockdown = ((_vehicle_status.nav_state == _vehicle_status.NAVIGATION_STATE_TERMINATION)
 					    || (_vehicle_status.hil_state == vehicle_status_s::HIL_STATE_ON)
 					    || _multicopter_throw_launch.isThrowLaunchInProgress());
-		// _actuator_armed.manual_lockdown // action_request_s::ACTION_KILL
 		_actuator_armed.force_failsafe = (_vehicle_status.nav_state == _vehicle_status.NAVIGATION_STATE_TERMINATION);
 		// _actuator_armed.in_esc_calibration_mode // VEHICLE_CMD_PREFLIGHT_CALIBRATION
+
+		if (parachuteReleaseRequestedByAttitudeFailure(now)) {
+			_manual_lockdown_latched_attitude_failure = true;
+		}
+
+		_actuator_armed.manual_lockdown = _manual_lockdown_by_user || _manual_lockdown_latched_attitude_failure;
 
 		const bool parachute_release_requested = _actuator_armed.force_failsafe || _actuator_armed.manual_lockdown;
 		const uint8_t parachute_action = parachute_release_requested ? vehicle_command_s::PARACHUTE_ACTION_RELEASE :
@@ -1924,6 +1949,9 @@ void Commander::run()
 			}
 
 		} else {
+			_manual_lockdown_by_user = false;
+			_manual_lockdown_latched_attitude_failure = false;
+			_actuator_armed.manual_lockdown = false;
 			_last_parachute_command = 0;
 			_last_parachute_action_valid = false;
 		}
