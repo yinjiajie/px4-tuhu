@@ -379,8 +379,9 @@ FlightTaskError FlightModeManager::switchTask(FlightTaskIndex new_task_index)
 	// Save current setpoints for the next FlightTask
 	trajectory_setpoint_s last_setpoint = FlightTask::empty_trajectory_setpoint;
 	ekf_reset_counters_s last_reset_counters{};
+	const bool had_previous_task = isAnyTaskActive();
 
-	if (isAnyTaskActive()) {
+	if (had_previous_task) {
 		last_setpoint = _current_task.task->getTrajectorySetpoint();
 		last_reset_counters = _current_task.task->getResetCounters();
 	}
@@ -401,6 +402,17 @@ FlightTaskError FlightModeManager::switchTask(FlightTaskIndex new_task_index)
 		_current_task.task = nullptr;
 		_current_task.index = FlightTaskIndex::None;
 		return FlightTaskError::ActivationFailed;
+	}
+
+	if (!had_previous_task) {
+		// Synchronize reset counters when starting from no active FlightTask (for example Offboard -> Auto).
+		// Otherwise the first update() would replay historic EKF reset deltas from vehicle_local_position.
+		const vehicle_local_position_s &vehicle_local_position = _vehicle_local_position_sub.get();
+		last_reset_counters.xy = vehicle_local_position.xy_reset_counter;
+		last_reset_counters.vxy = vehicle_local_position.vxy_reset_counter;
+		last_reset_counters.z = vehicle_local_position.z_reset_counter;
+		last_reset_counters.vz = vehicle_local_position.vz_reset_counter;
+		last_reset_counters.heading = vehicle_local_position.heading_reset_counter;
 	}
 
 	_current_task.task->setResetCounters(last_reset_counters);
