@@ -138,6 +138,8 @@ private:
 	vehicle_command_s _current_command{};
 	bool _command_failed{false};
 
+	vehicle_local_position_s _vehicle_local_position{};
+
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 
 	uORB::Subscription _takeoff_status_sub{ORB_ID(takeoff_status)};
