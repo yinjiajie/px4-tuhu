@@ -95,10 +95,8 @@ void FlightModeManager::Run()
 	}
 
 	// generate setpoints on local position changes
-	vehicle_local_position_s vehicle_local_position;
-
-	if (_vehicle_local_position_sub.update(&vehicle_local_position)) {
-		const hrt_abstime time_stamp_now = vehicle_local_position.timestamp_sample;
+	if (_vehicle_local_position_sub.update(&_vehicle_local_position)) {
+		const hrt_abstime time_stamp_now = _vehicle_local_position.timestamp_sample;
 		// Guard against too small (< 0.2ms) and too large (> 100ms) dt's.
 		const float dt = math::constrain(((time_stamp_now - _time_stamp_last_loop) / 1e6f), 0.0002f, 0.1f);
 		_time_stamp_last_loop = time_stamp_now;
@@ -116,7 +114,7 @@ void FlightModeManager::Run()
 		tryApplyCommandIfAny();
 
 		if (isAnyTaskActive()) {
-			generateTrajectorySetpoint(dt, vehicle_local_position);
+			generateTrajectorySetpoint(dt, _vehicle_local_position);
 		}
 
 	}
@@ -407,12 +405,11 @@ FlightTaskError FlightModeManager::switchTask(FlightTaskIndex new_task_index)
 	if (!had_previous_task) {
 		// Synchronize reset counters when starting from no active FlightTask (for example Offboard -> Auto).
 		// Otherwise the first update() would replay historic EKF reset deltas from vehicle_local_position.
-		const vehicle_local_position_s &vehicle_local_position = _vehicle_local_position_sub.get();
-		last_reset_counters.xy = vehicle_local_position.xy_reset_counter;
-		last_reset_counters.vxy = vehicle_local_position.vxy_reset_counter;
-		last_reset_counters.z = vehicle_local_position.z_reset_counter;
-		last_reset_counters.vz = vehicle_local_position.vz_reset_counter;
-		last_reset_counters.heading = vehicle_local_position.heading_reset_counter;
+		last_reset_counters.xy = _vehicle_local_position.xy_reset_counter;
+		last_reset_counters.vxy = _vehicle_local_position.vxy_reset_counter;
+		last_reset_counters.z = _vehicle_local_position.z_reset_counter;
+		last_reset_counters.vz = _vehicle_local_position.vz_reset_counter;
+		last_reset_counters.heading = _vehicle_local_position.heading_reset_counter;
 	}
 
 	_current_task.task->setResetCounters(last_reset_counters);
