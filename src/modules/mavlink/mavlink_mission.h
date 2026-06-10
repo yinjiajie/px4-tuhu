@@ -100,7 +100,8 @@ private:
 	uint64_t		_time_last_recv{0};
 	uint64_t		_time_last_sent{0};
 
-	uint8_t			_reached_sent_count{0};			///< last time when the vehicle reached a waypoint
+	uint8_t			_reached_sent_count{0};			///< Number of legacy retries sent for the last reached item
+	hrt_abstime		_last_reached_sent{0};			///< Last time a MISSION_ITEM_REACHED was sent
 
 	bool			_int_mode{false};			///< Use accurate int32 instead of float
 
@@ -147,6 +148,8 @@ private:
 	MavlinkRateLimiter	_slow_rate_limiter{1000 * 1000};		///< Rate limit sending of the current WP sequence to 1 Hz
 
 	Mavlink *_mavlink;
+
+	static constexpr hrt_abstime	MISSION_ITEM_REACHED_ONBOARD_INTERVAL_US = 500000;	///< Resend latest reached item to onboard links at 2 Hz
 
 	static constexpr unsigned int	FILESYSTEM_ERRCOUNT_NOTIFY_LIMIT =
 		2;	///< Error count limit before stopping to report FS errors
