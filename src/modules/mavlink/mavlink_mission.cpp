@@ -482,6 +482,7 @@ MavlinkMissionManager::send_mission_item_reached(uint16_t seq)
 	wp_reached.seq = seq;
 
 	mavlink_msg_mission_item_reached_send_struct(_mavlink->get_channel(), &wp_reached);
+	_last_reached_sent = hrt_absolute_time();
 
 	PX4_DEBUG("WPM: Send MISSION_ITEM_REACHED reached_seq %u", wp_reached.seq);
 }
@@ -489,8 +490,12 @@ MavlinkMissionManager::send_mission_item_reached(uint16_t seq)
 void
 MavlinkMissionManager::send()
 {
+	const hrt_abstime now = hrt_absolute_time();
+	const Mavlink::MAVLINK_MODE mavlink_mode = _mavlink->get_mode();
+	const bool resend_to_onboard_link = mavlink_mode == Mavlink::MAVLINK_MODE_ONBOARD;
+
 	// do not send anything over high latency communication
-	if (_mavlink->get_mode() == Mavlink::MAVLINK_MODE_IRIDIUM) {
+	if (mavlink_mode == Mavlink::MAVLINK_MODE_IRIDIUM) {
 		return;
 	}
 
@@ -540,16 +545,23 @@ MavlinkMissionManager::send()
 			}
 		}
 
-	} else if (_slow_rate_limiter.check(hrt_absolute_time())) {
+	} else if (_slow_rate_limiter.check(now)) {
 		send_mission_current(_current_seq);
 
-		if ((_count[MAV_MISSION_TYPE_MISSION] > 0) && (_current_seq >= 0)) {
-			// send the reached message another 10 times
+		if (!resend_to_onboard_link && (_count[MAV_MISSION_TYPE_MISSION] > 0) && (_current_seq >= 0)) {
+			// Keep the existing retry behavior for non-onboard MAVLink links.
 			if (_last_reached >= 0 && (_reached_sent_count < 10)) {
 				send_mission_item_reached((uint16_t)_last_reached);
 				_reached_sent_count++;
 			}
 		}
+	}
+
+	if (resend_to_onboard_link
+	    && (_count[MAV_MISSION_TYPE_MISSION] > 0)
+	    && (_last_reached >= 0)
+	    && (hrt_elapsed_time(&_last_reached_sent) >= MISSION_ITEM_REACHED_ONBOARD_INTERVAL_US)) {
+		send_mission_item_reached((uint16_t)_last_reached);
 	}
 
 	/* check for timed-out operations */
