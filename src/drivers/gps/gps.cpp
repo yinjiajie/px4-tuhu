@@ -64,6 +64,7 @@
 #include <uORB/SubscriptionMultiArray.hpp>
 #include <uORB/topics/gps_dump.h>
 #include <uORB/topics/gps_inject_data.h>
+#include <uORB/topics/input_rc.h>
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/sensor_gnss_relative.h>
 
@@ -110,6 +111,9 @@ struct GPS_Sat_Info {
 };
 
 static constexpr int TASK_STACK_SIZE = PX4_STACK_ADJUSTED(2040);
+static constexpr uint8_t GPS_UART_DISCONNECT_RC_CHANNEL_INDEX{7};
+static constexpr uint16_t GPS_UART_DISCONNECT_RC_THRESHOLD_US{1500};
+static constexpr uint16_t GPS_UART_DISCONNECT_RC_VALID_MAX_US{2500};
 
 
 class GPS : public ModuleBase<GPS>, public device::Device
@@ -208,11 +212,14 @@ private:
 	const Instance 			_instance;
 
 	uORB::SubscriptionMultiArray<gps_inject_data_s, gps_inject_data_s::MAX_INSTANCES> _orb_inject_data_sub{ORB_ID::gps_inject_data};
+	uORB::Subscription _input_rc_sub{ORB_ID(input_rc)};
 	uORB::Publication<gps_inject_data_s> _gps_inject_data_pub{ORB_ID(gps_inject_data)};
 	uORB::Publication<gps_dump_s>	     _dump_communication_pub{ORB_ID(gps_dump)};
 	gps_dump_s			     *_dump_to_device{nullptr};
 	gps_dump_s			     *_dump_from_device{nullptr};
 	gps_dump_comm_mode_t                 _dump_communication_mode{gps_dump_comm_mode_t::Disabled};
+	bool				     _gps_uart_disconnect_rc_switch_on{false};
+	uint16_t			     _gps_uart_disconnect_rc_pwm{0};
 
 	static px4::atomic_bool _is_gps_main_advertised; ///< for the second gps we want to make sure that it gets instance 1
 	/// and thus we wait until the first one publishes at least one message.
@@ -287,6 +294,8 @@ private:
 	void dumpGpsData(uint8_t *data, size_t len, gps_dump_comm_mode_t mode, bool msg_to_gps_device);
 
 	void initializeCommunicationDump();
+
+	void updateGpsUartDisconnectRcSwitch();
 
 	static constexpr int SET_CLOCK_DRIFT_TIME_S{5};			///< RTC drift time when time synchronization is needed (in seconds)
 };
@@ -471,6 +480,13 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 	const int max_timeout = 50;
 	int timeout_adjusted = math::min(max_timeout, timeout);
 
+	updateGpsUartDisconnectRcSwitch();
+
+	if (_gps_uart_disconnect_rc_switch_on) {
+		px4_usleep(timeout_adjusted * 1000);
+		return 0;
+	}
+
 	handleInjectDataTopic();
 
 	if (_interface == GPSHelper::Interface::UART) {
@@ -524,6 +540,33 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 	}
 
 	return ret;
+}
+
+void GPS::updateGpsUartDisconnectRcSwitch()
+{
+	input_rc_s input_rc{};
+
+	if (!_input_rc_sub.update(&input_rc)) {
+		return;
+	}
+
+	const bool previous_switch_state = _gps_uart_disconnect_rc_switch_on;
+	_gps_uart_disconnect_rc_switch_on = false;
+	_gps_uart_disconnect_rc_pwm = 0;
+
+	if (!input_rc.rc_lost
+	    && !input_rc.rc_failsafe
+	    && (input_rc.channel_count > GPS_UART_DISCONNECT_RC_CHANNEL_INDEX)) {
+		_gps_uart_disconnect_rc_pwm = input_rc.values[GPS_UART_DISCONNECT_RC_CHANNEL_INDEX];
+		_gps_uart_disconnect_rc_switch_on = (_gps_uart_disconnect_rc_pwm > GPS_UART_DISCONNECT_RC_THRESHOLD_US)
+						    && (_gps_uart_disconnect_rc_pwm < GPS_UART_DISCONNECT_RC_VALID_MAX_US);
+	}
+
+	if ((_instance == Instance::Main) && (_gps_uart_disconnect_rc_switch_on != previous_switch_state)) {
+		PX4_INFO("RC channel 8 GPS UART disconnect %s (pwm=%u)",
+			 _gps_uart_disconnect_rc_switch_on ? "enabled" : "disabled",
+			 _gps_uart_disconnect_rc_pwm);
+	}
 }
 
 void GPS::handleInjectDataTopic()
@@ -781,6 +824,30 @@ GPS::run()
 
 	/* loop handling received serial bytes and also configuring in between */
 	while (!should_exit()) {
+		updateGpsUartDisconnectRcSwitch();
+
+		if (_gps_uart_disconnect_rc_switch_on) {
+			if (_healthy) {
+				_healthy = false;
+				_rate = 0.0f;
+				_rate_rtcm_injection = 0.0f;
+			}
+
+			if (_interface == GPSHelper::Interface::UART && _uart.isOpen()) {
+				(void)_uart.close();
+			}
+
+#ifdef __PX4_LINUX
+			if ((_interface == GPSHelper::Interface::SPI) && (_spi_fd >= 0)) {
+				::close(_spi_fd);
+				_spi_fd = -1;
+			}
+#endif
+
+			px4_usleep(200000);
+			continue;
+		}
+
 		if (_helper != nullptr) {
 			delete (_helper);
 			_helper = nullptr;
@@ -1120,6 +1187,10 @@ GPS::print_status()
 
 	PX4_INFO("status: %s, port: %s, baudrate: %d", _healthy ? "OK" : "NOT OK", _port, _baudrate);
 	PX4_INFO("sat info: %s", (_p_report_sat_info != nullptr) ? "enabled" : "disabled");
+	PX4_INFO("RC ch8 GPS UART disconnect: %s (pwm=%u, threshold=%u)",
+		 _gps_uart_disconnect_rc_switch_on ? "on" : "off",
+		 _gps_uart_disconnect_rc_pwm,
+		 GPS_UART_DISCONNECT_RC_THRESHOLD_US);
 	PX4_INFO("rate reading: \t\t%6i B/s", _rate_reading);
 
 	if (_report_gps_pos.timestamp != 0) {
@@ -1178,6 +1249,12 @@ void
 GPS::publish()
 {
 	if (_instance == Instance::Main || _is_gps_main_advertised.load()) {
+		updateGpsUartDisconnectRcSwitch();
+
+		if (_gps_uart_disconnect_rc_switch_on) {
+			return;
+		}
+
 		_report_gps_pos.device_id = get_device_id();
 
 		_report_gps_pos.selected_rtcm_instance = _selected_rtcm_instance;
