@@ -135,6 +135,7 @@ param set EKF2_SEL_IMU_ACC 1.0
 param set EKF2_SEL_IMU_ANG 15.0
 param set EKF2_SEL_IMU_RAT 7.0
 param set EKF2_SEL_IMU_VEL 2.0
+param set EKF2_HGT_REF 0  #baro
 
 param set MPC_ALT_MODE 0  #Altitude Following
 param set COM_RC_IN_MODE 3
@@ -164,3 +165,4 @@ param set IMU_GYRO_FFT_LEN 512
 param set IMU_GYRO_FFT_MIN 30
 param set IMU_GYRO_FFT_MAX 150
 param set IMU_GYRO_FFT_SNR 10
+
