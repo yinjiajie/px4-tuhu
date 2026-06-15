@@ -136,6 +136,7 @@ param set EKF2_SEL_IMU_ANG 15.0
 param set EKF2_SEL_IMU_RAT 7.0
 param set EKF2_SEL_IMU_VEL 2.0
 param set EKF2_HGT_REF 0  #baro
+param set EKF2_RNG_CTRL 1  #
 
 param set MPC_ALT_MODE 0  #Altitude Following
 param set COM_RC_IN_MODE 3
