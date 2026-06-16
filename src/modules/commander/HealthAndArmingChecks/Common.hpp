@@ -260,7 +260,7 @@ public:
 
 	bool modePreventsArming(uint8_t nav_state) const { return _failsafe_flags.mode_req_prevent_arming & (1u << nav_state); }
 
-	bool addExternalEvent(const event_s &event, NavModes modes);
+	bool addExternalEvent(const event_s &event, NavModes modes, NavModes blocking_modes);
 private:
 
 	/**
@@ -290,19 +290,19 @@ private:
 		uint8_t size; ///< arguments size
 		uint32_t id;
 		uint8_t log_levels;
-#ifdef CONSOLE_PRINT_ARMING_CHECK_EVENT
+		uint32_t blocking_modes;
 		const char *message;
-#endif
 	};
 
 	void healthFailure(NavModes required_modes, HealthComponentIndex component, events::Log log_level);
 	void armingCheckFailure(NavModes required_modes, HealthComponentIndex component, events::Log log_level);
 
 	template<typename... Args>
-	bool addEvent(uint32_t event_id, const events::LogLevels &log_levels, const char *message, uint32_t modes,
+	bool addEvent(uint32_t event_id, const events::LogLevels &log_levels, const char *message, uint32_t reported_modes,
+		      uint32_t blocking_modes,
 		      Args... args);
-	Report::EventBufferHeader *addEventToBuffer(uint32_t event_id, const events::LogLevels &log_levels, uint32_t modes,
-			unsigned args_size);
+	Report::EventBufferHeader *addEventToBuffer(uint32_t event_id, const events::LogLevels &log_levels,
+			uint32_t reported_modes, uint32_t blocking_modes, unsigned args_size);
 
 	NavModes reportedModes(NavModes required_modes);
 
@@ -360,7 +360,8 @@ void Report::healthFailure(NavModes required_modes, HealthComponentIndex compone
 			   const events::LogLevels &log_levels, const char *message, Args... args)
 {
 	healthFailure(required_modes, component, log_levels.external);
-	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), (uint8_t)component.index, args...);
+	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), (uint32_t)required_modes,
+		 (uint8_t)component.index, args...);
 }
 
 template<typename... Args>
@@ -368,14 +369,16 @@ void Report::armingCheckFailure(NavModes required_modes, HealthComponentIndex co
 				const events::LogLevels &log_levels, const char *message, Args... args)
 {
 	armingCheckFailure(required_modes, component, log_levels.external);
-	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), (uint8_t)component.index, args...);
+	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), (uint32_t)required_modes,
+		 (uint8_t)component.index, args...);
 }
 
 template<typename... Args>
-bool Report::addEvent(uint32_t event_id, const events::LogLevels &log_levels, const char *message, uint32_t modes,
+bool Report::addEvent(uint32_t event_id, const events::LogLevels &log_levels, const char *message, uint32_t reported_modes,
+		      uint32_t blocking_modes,
 		      Args... args)
 {
-	constexpr unsigned args_size = events::util::sizeofArguments(modes, args...);
+	constexpr unsigned args_size = events::util::sizeofArguments(reported_modes, args...);
 	static_assert(args_size <= sizeof(events::EventType::arguments), "Too many arguments");
 	unsigned total_size = sizeof(EventBufferHeader) + args_size;
 
@@ -384,14 +387,10 @@ bool Report::addEvent(uint32_t event_id, const events::LogLevels &log_levels, co
 		return false;
 	}
 
-	events::util::fillEventArguments(_event_buffer + _next_buffer_idx + sizeof(EventBufferHeader), modes, args...);
+	events::util::fillEventArguments(_event_buffer + _next_buffer_idx + sizeof(EventBufferHeader), reported_modes, args...);
 	// We split out the part of the code not requiring templating to reduce flash usage a bit
-	EventBufferHeader *header = addEventToBuffer(event_id, log_levels, modes, args_size);
-#ifdef CONSOLE_PRINT_ARMING_CHECK_EVENT
+	EventBufferHeader *header = addEventToBuffer(event_id, log_levels, reported_modes, blocking_modes, args_size);
 	memcpy(&header->message, &message, sizeof(message));
-#else
-	(void)header;
-#endif
 	return true;
 }
 

@@ -33,6 +33,171 @@
 
 #include "HealthAndArmingChecks.hpp"
 
+#include <cstring>
+
+namespace
+{
+
+template<typename T>
+bool readEventArgument(const uint8_t *arguments, unsigned size, unsigned &offset, T &value)
+{
+	if (offset + sizeof(T) > size) {
+		return false;
+	}
+
+	memcpy(&value, arguments + offset, sizeof(T));
+	offset += sizeof(T);
+	return true;
+}
+
+constexpr uint32_t autopilotEventId(const char *name)
+{
+	return (0xffffff & events::util::hash_32_fnv1a_const(name)) | (1u << 24);
+}
+
+const char *parameterHintForEvent(uint32_t event_id)
+{
+	switch (event_id) {
+	case autopilotEventId("check_estimator_hgt_est_err"):
+		return "param: COM_ARM_EKF_HGT";
+
+	case autopilotEventId("check_estimator_vel_est_err"):
+		return "param: COM_ARM_EKF_VEL";
+
+	case autopilotEventId("check_estimator_pos_est_err"):
+		return "param: COM_ARM_EKF_POS";
+
+	case autopilotEventId("check_estimator_yaw_est_err"):
+		return "param: COM_ARM_EKF_YAW";
+
+	case autopilotEventId("check_estimator_gps_fix_too_low"):
+	case autopilotEventId("check_estimator_gps_num_sats_too_low"):
+	case autopilotEventId("check_estimator_gps_pdop_too_high"):
+	case autopilotEventId("check_estimator_gps_hor_pos_err_too_high"):
+	case autopilotEventId("check_estimator_gps_vert_pos_err_too_high"):
+	case autopilotEventId("check_estimator_gps_speed_acc_too_low"):
+	case autopilotEventId("check_estimator_gps_hor_pos_drift_too_high"):
+	case autopilotEventId("check_estimator_gps_vert_pos_drift_too_high"):
+	case autopilotEventId("check_estimator_gps_hor_speed_drift_too_high"):
+	case autopilotEventId("check_estimator_gps_vert_speed_drift_too_high"):
+	case autopilotEventId("check_estimator_gps_not_fusing"):
+	case autopilotEventId("check_estimator_gps_generic"):
+		return "param: EKF2_GPS_CHECK";
+
+	case autopilotEventId("check_estimator_mag_interference"):
+		return "params: COM_ARM_MAG_STR, EKF2_MAG_CHECK";
+
+	case autopilotEventId("check_mag_consistency"):
+		return "param: COM_ARM_MAG_ANG";
+
+	case autopilotEventId("check_imu_accel_inconsistent"):
+		return "param: COM_ARM_IMU_ACC";
+
+	case autopilotEventId("check_imu_gyro_inconsistent"):
+		return "param: COM_ARM_IMU_GYR";
+
+	case autopilotEventId("check_modes_manual_control"):
+		return "param: COM_RC_IN_MODE";
+
+	case autopilotEventId("check_man_control_kill_engaged"):
+		return "action: release RC kill switch; params: RC_MAP_KILL_SW, RC_KILLSWITCH_TH";
+
+	case autopilotEventId("check_modes_mission"):
+		return "param: COM_ARM_MIS_REQ";
+
+	case autopilotEventId("check_system_no_global_pos"):
+	case autopilotEventId("check_system_no_home_pos"):
+		return "param: COM_ARM_WO_GPS";
+
+	case autopilotEventId("check_system_usb_connected"):
+		return "param: CBRK_USB_CHK";
+
+	case autopilotEventId("check_system_safety_button"):
+		return "param: CBRK_IO_SAFETY";
+
+	case autopilotEventId("check_system_flight_term_active"):
+		return "action: clear kill/termination state";
+
+	case autopilotEventId("check_system_avoidance_not_ready"):
+		return "param: COM_OBS_AVOID";
+
+	case autopilotEventId("check_system_vtol_in_fw_mode"):
+		return "param: CBRK_VTOLARMING";
+
+	case autopilotEventId("check_battery_preflight_low"):
+		return "param: COM_ARM_BAT_MIN";
+
+	case autopilotEventId("check_estimator_high_accel_bias"):
+		return "param: EKF2_ABL_LIM";
+
+	case autopilotEventId("check_estimator_high_gyro_bias"):
+		return "param: EKF2_ABL_GYRLIM";
+
+	case autopilotEventId("check_parachute_missing"):
+	case autopilotEventId("check_parachute_unhealthy"):
+		return "param: COM_PARACHUTE";
+
+	case autopilotEventId("check_missing_fmu_sdcard"):
+		return "param: COM_ARM_SDCARD";
+
+	case autopilotEventId("check_hardfault_present"):
+		return "param: COM_ARM_HFLT_CHK";
+
+	case autopilotEventId("check_open_drone_id_missing"):
+	case autopilotEventId("check_open_drone_id_unhealthy"):
+		return "param: COM_ARM_ODID";
+
+	default:
+		return nullptr;
+	}
+}
+
+void printKnownEventDetails(uint32_t event_id, const uint8_t *arguments, unsigned size)
+{
+	unsigned offset = sizeof(uint32_t) + sizeof(uint8_t);
+
+	if (event_id == autopilotEventId("check_estimator_hgt_est_err")
+	    || event_id == autopilotEventId("check_estimator_vel_est_err")
+	    || event_id == autopilotEventId("check_estimator_pos_est_err")
+	    || event_id == autopilotEventId("check_estimator_yaw_est_err")) {
+		float current{};
+		float limit{};
+
+		if (readEventArgument(arguments, size, offset, current) && readEventArgument(arguments, size, offset, limit)) {
+			PX4_INFO_RAW(" (current=%.3f limit=%.3f)", (double)current, (double)limit);
+		}
+
+		return;
+	}
+
+	if (event_id == autopilotEventId("check_imu_accel_inconsistent")
+	    || event_id == autopilotEventId("check_imu_gyro_inconsistent")) {
+		uint8_t instance{};
+		float current{};
+		float limit{};
+
+		if (readEventArgument(arguments, size, offset, instance)
+		    && readEventArgument(arguments, size, offset, current)
+		    && readEventArgument(arguments, size, offset, limit)) {
+			PX4_INFO_RAW(" (sensor=%u current=%.3f limit=%.3f)", instance, (double)current, (double)limit);
+		}
+
+		return;
+	}
+
+	if (event_id == autopilotEventId("check_accel_not_calibrated")
+	    || event_id == autopilotEventId("check_mag_not_calibrated")
+	    || event_id == autopilotEventId("check_mag_fault")) {
+		uint8_t instance{};
+
+		if (readEventArgument(arguments, size, offset, instance)) {
+			PX4_INFO_RAW(" (sensor=%u)", instance);
+		}
+	}
+}
+
+} // namespace
+
 HealthAndArmingChecks::HealthAndArmingChecks(ModuleParams *parent, vehicle_status_s &status)
 	: ModuleParams(parent),
 	  _context(status)
@@ -106,6 +271,56 @@ bool HealthAndArmingChecks::update(bool force_reporting)
 	}
 
 	return reported;
+}
+
+void HealthAndArmingChecks::printArmingBlockersToConsole() const
+{
+	const Report::Results &current_results = _reporter._results[_reporter._current_result];
+	const uint32_t current_mode_group = (uint32_t)_reporter.getModeGroup(_context.status().nav_state);
+
+	if (current_results.num_events == 0) {
+		PX4_INFO_RAW("No arming blockers found.\n");
+		return;
+	}
+
+	int offset = 0;
+	int blocker_count = 0;
+
+	for (int event_index = 0;
+	     event_index < current_results.num_events && offset < _reporter._next_buffer_idx;
+	     ++event_index) {
+		const auto *header = reinterpret_cast<const Report::EventBufferHeader *>(_reporter._event_buffer + offset);
+		const uint8_t *arguments = _reporter._event_buffer + offset + sizeof(Report::EventBufferHeader);
+		uint32_t blocking_modes{};
+		const char *message = nullptr;
+
+		memcpy(&blocking_modes, &header->blocking_modes, sizeof(blocking_modes));
+		offset += sizeof(Report::EventBufferHeader) + header->size;
+
+		if ((blocking_modes & current_mode_group) == 0) {
+			continue;
+		}
+
+		memcpy(&message, &header->message, sizeof(message));
+
+		if (blocker_count == 0) {
+			PX4_INFO_RAW("Arming blockers:\n");
+		}
+
+		PX4_INFO_RAW("  %d. %s", blocker_count + 1, message ? message : "Unknown arming check failure");
+
+		if (const char *hint = parameterHintForEvent(header->id)) {
+			PX4_INFO_RAW(" [%s]", hint);
+		}
+
+		printKnownEventDetails(header->id, arguments, header->size);
+		PX4_INFO_RAW("\n");
+		++blocker_count;
+	}
+
+	if (blocker_count == 0) {
+		PX4_INFO_RAW("No arming blockers found.\n");
+	}
 }
 
 void HealthAndArmingChecks::updateParams()

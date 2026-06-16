@@ -102,6 +102,8 @@ public:
 
 	const failsafe_flags_s &failsafeFlags() const { return _failsafe_flags; }
 
+	void printArmingBlockersToConsole() const;
+
 #ifndef CONSTRAINED_FLASH
 	ExternalChecks &externalChecks() { return _external_checks; }
 #endif
@@ -187,4 +189,3 @@ private:
 		&_vtol_checks,
 	};
 };
-

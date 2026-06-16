@@ -63,31 +63,36 @@ void Report::healthFailure(NavModes required_modes, HealthComponentIndex compone
 			   const events::LogLevels &log_levels, const char *message)
 {
 	healthFailure(required_modes, component, log_levels.external);
-	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), component.index);
+	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), (uint32_t)required_modes,
+		 component.index);
 }
 
 void Report::armingCheckFailure(NavModes required_modes, HealthComponentIndex component, uint32_t event_id,
 				const events::LogLevels &log_levels, const char *message)
 {
 	armingCheckFailure(required_modes, component, log_levels.external);
-	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), component.index);
+	addEvent(event_id, log_levels, message, (uint32_t)reportedModes(required_modes), (uint32_t)required_modes,
+		 component.index);
 }
 
 Report::EventBufferHeader *Report::addEventToBuffer(uint32_t event_id, const events::LogLevels &log_levels,
-		uint32_t modes, unsigned args_size)
+		uint32_t reported_modes, uint32_t blocking_modes, unsigned args_size)
 {
 	unsigned total_size = sizeof(EventBufferHeader) + args_size;
 	EventBufferHeader *header = (EventBufferHeader *)(_event_buffer + _next_buffer_idx);
+	const char *message{nullptr};
 	memcpy(&header->id, &event_id, sizeof(event_id)); // header might be unaligned
 	header->log_levels = ((uint8_t)log_levels.internal << 4) | (uint8_t)log_levels.external;
 	header->size = args_size;
+	memcpy(&header->blocking_modes, &blocking_modes, sizeof(blocking_modes));
+	memcpy(&header->message, &message, sizeof(message));
 	_next_buffer_idx += total_size;
 	++_results[_current_result].num_events;
-	_results[_current_result].event_id_hash ^= event_id ^ modes; // very simple hash
+	_results[_current_result].event_id_hash ^= event_id ^ reported_modes; // very simple hash
 	return header;
 }
 
-bool Report::addExternalEvent(const event_s &event, NavModes modes)
+bool Report::addExternalEvent(const event_s &event, NavModes modes, NavModes blocking_modes)
 {
 	unsigned args_size = sizeof(event.arguments);
 
@@ -105,7 +110,7 @@ bool Report::addExternalEvent(const event_s &event, NavModes modes)
 
 	events::LogLevels log_levels{events::externalLogLevel(event.log_levels), events::internalLogLevel((event.log_levels))};
 	memcpy(_event_buffer + _next_buffer_idx + sizeof(EventBufferHeader), &event.arguments, args_size);
-	addEventToBuffer(event.id, log_levels, (uint32_t)modes, args_size);
+	addEventToBuffer(event.id, log_levels, (uint32_t)modes, (uint32_t)blocking_modes, args_size);
 	return true;
 }
 

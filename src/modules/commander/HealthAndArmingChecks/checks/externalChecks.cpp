@@ -252,10 +252,10 @@ void ExternalChecks::checkAndReport(const Context &context, Report &reporter)
 				// set the modes, which is the first argument
 				memcpy(reply.events[i].arguments, &modes, sizeof(modes));
 
-				reporter.addExternalEvent(reply.events[i], modes);
+					reporter.addExternalEvent(reply.events[i], modes, reply.can_arm_and_run ? NavModes::None : modes);
+				}
 			}
 		}
-	}
 
 	if (unresponsive_modes != NavModes::None) {
 		/* EVENT

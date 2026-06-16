@@ -294,11 +294,16 @@ int Commander::custom_command(int argc, char *argv[])
 		}
 	}
 
-	if (!strcmp(argv[0], "check")) {
+	if (!strcmp(argv[0], "check") || !strcmp(argv[0], "armcheck")) {
+		uORB::SubscriptionData<vehicle_command_ack_s> vehicle_command_ack_sub{ORB_ID(vehicle_command_ack)};
 		send_vehicle_command(vehicle_command_s::VEHICLE_CMD_RUN_PREARM_CHECKS);
 
-		uORB::SubscriptionData<vehicle_status_s> vehicle_status_sub{ORB_ID(vehicle_status)};
-		PX4_INFO("Preflight check: %s", vehicle_status_sub.get().pre_flight_checks_pass ? "OK" : "FAILED");
+		wait_for_vehicle_command_reply(vehicle_command_s::VEHICLE_CMD_RUN_PREARM_CHECKS, vehicle_command_ack_sub);
+
+		uORB::Subscription vehicle_status_sub{ORB_ID(vehicle_status)};
+		vehicle_status_s vehicle_status{};
+		vehicle_status_sub.copy(&vehicle_status);
+		PX4_INFO("Preflight check: %s", vehicle_status.pre_flight_checks_pass ? "OK" : "FAILED");
 
 		return 0;
 	}
@@ -1454,6 +1459,9 @@ Commander::handle_command(const vehicle_command_s &cmd)
 
 	case vehicle_command_s::VEHICLE_CMD_RUN_PREARM_CHECKS:
 		_health_and_arming_checks.update(true);
+		_vehicle_status.pre_flight_checks_pass = _health_and_arming_checks.canArm(_vehicle_status.nav_state);
+		_vehicle_status_pub.publish(_vehicle_status);
+		_health_and_arming_checks.printArmingBlockersToConsole();
 		answer_command(cmd, vehicle_command_ack_s::VEHICLE_CMD_RESULT_ACCEPTED);
 		break;
 
@@ -3117,7 +3125,8 @@ The commander module contains the state machine for mode switching and failsafe 
 	PRINT_MODULE_USAGE_COMMAND_DESCR("calibrate", "Run sensor calibration");
 	PRINT_MODULE_USAGE_ARG("mag|baro|accel|gyro|level|esc|airspeed", "Calibration type", false);
 	PRINT_MODULE_USAGE_ARG("quick", "Quick calibration (accel only, not recommended)", false);
-	PRINT_MODULE_USAGE_COMMAND_DESCR("check", "Run preflight checks");
+	PRINT_MODULE_USAGE_COMMAND_DESCR("check", "Run preflight checks and print arming blockers");
+	PRINT_MODULE_USAGE_COMMAND_DESCR("armcheck", "Run preflight checks and print arming blockers");
 	PRINT_MODULE_USAGE_COMMAND("arm");
 	PRINT_MODULE_USAGE_PARAM_FLAG('f', "Force arming (do not run preflight checks)", true);
 	PRINT_MODULE_USAGE_COMMAND("disarm");
