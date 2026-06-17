@@ -74,7 +74,7 @@ param set EKF2_IMU_POS_Y 0
 param set EKF2_IMU_POS_Z -0.02
 
 param set EKF2_GPS_POS_X 0
-param set EKF2_GPS_POS_Y -0.17
+param set EKF2_GPS_POS_Y 0.17
 param set EKF2_GPS_POS_Z -0.02
 
 param set EKF2_GPS_CTRL 7
