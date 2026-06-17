@@ -166,3 +166,5 @@ param set IMU_GYRO_FFT_MIN 30
 param set IMU_GYRO_FFT_MAX 150
 param set IMU_GYRO_FFT_SNR 10
 
+param set EKF2_TERR_MASK 1
+param set EKF2_RNG_CTRL 1
