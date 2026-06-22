@@ -1930,30 +1930,29 @@ void Commander::run()
 			_manual_lockdown_latched_attitude_failure = true;
 		}
 
+		if (!isArmed()) {
+			_manual_lockdown_by_user = false;
+			_manual_lockdown_latched_attitude_failure = false;
+		}
+
 		_actuator_armed.manual_lockdown = _manual_lockdown_by_user || _manual_lockdown_latched_attitude_failure;
 
-		const bool parachute_release_requested = _actuator_armed.force_failsafe || _actuator_armed.manual_lockdown;
+		// Keep the parachute module fed with non-release packets continuously,
+		// but only send a release command while the vehicle is actually armed.
+		const bool parachute_release_requested = isArmed()
+							&& (_actuator_armed.force_failsafe || _actuator_armed.manual_lockdown);
 		const uint8_t parachute_action = parachute_release_requested ? vehicle_command_s::PARACHUTE_ACTION_RELEASE :
 						 vehicle_command_s::PARACHUTE_ACTION_ENABLE;
 		const bool parachute_action_changed = !_last_parachute_action_valid || (_last_parachute_action != parachute_action);
 
-		if (isArmed()) {
-			if (parachute_action_changed
-			    || (now >= _last_parachute_command + COMMANDER_PARACHUTE_COMMAND_INTERVAL)) {
-				const bool play_release_tune = parachute_action_changed
-							       && (parachute_action == vehicle_command_s::PARACHUTE_ACTION_RELEASE);
-				send_parachute_command(parachute_action, play_release_tune);
-				_last_parachute_command = now;
-				_last_parachute_action = parachute_action;
-				_last_parachute_action_valid = true;
-			}
-
-		} else {
-			_manual_lockdown_by_user = false;
-			_manual_lockdown_latched_attitude_failure = false;
-			_actuator_armed.manual_lockdown = false;
-			_last_parachute_command = 0;
-			_last_parachute_action_valid = false;
+		if (parachute_action_changed
+		    || (now >= _last_parachute_command + COMMANDER_PARACHUTE_COMMAND_INTERVAL)) {
+			const bool play_release_tune = parachute_action_changed
+						       && (parachute_action == vehicle_command_s::PARACHUTE_ACTION_RELEASE);
+			send_parachute_command(parachute_action, play_release_tune);
+			_last_parachute_command = now;
+			_last_parachute_action = parachute_action;
+			_last_parachute_action_valid = true;
 		}
 
 		// publish states (armed, control_mode, vehicle_status, failure_detector_status) at 2 Hz or immediately when changed
