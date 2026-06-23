@@ -78,7 +78,6 @@ public:
 	static constexpr int MAX_TOPICS_NUM = 255; /**< Maximum number of logged topics */
 
 	static constexpr int MAX_EXCLUDED_OPTIONAL_TOPICS_NUM = 40;
-	static constexpr uint16_t UNIFORM_LOG_INTERVAL_MS = 20; /**< Uniform storage interval for all logged topics */
 
 	struct RequestedSubscription {
 		uint16_t interval_ms;
@@ -182,8 +181,6 @@ private:
 	 * @return true on success
 	 */
 	bool add_topic(const orb_metadata *topic, uint16_t interval_ms = 0, uint8_t instance = 0, bool optional = false);
-
-	uint16_t uniform_interval_ms() const;
 
 	RequestedSubscriptionArray _subscriptions;
 	int _num_mission_subs{0};
