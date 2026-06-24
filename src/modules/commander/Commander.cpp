@@ -100,6 +100,8 @@ static constexpr bool operator ==(const actuator_armed_s &a, const actuator_arme
 }
 static_assert(sizeof(actuator_armed_s) == 16, "actuator_armed equality operator review");
 
+static constexpr float PARACHUTE_MIN_RELEASE_HEIGHT_ABOVE_TAKEOFF_M = 10.f;
+
 bool Commander::parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const
 {
 	if (!isArmed() || _vehicle_status.armed_time == 0 || _vehicle_status.takeoff_time == 0 || _vehicle_land_detected.landed) {
@@ -115,6 +117,16 @@ bool Commander::parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now
 
 	// The failure detector attitude bits are only set after FD_FAIL_*_TTRI hysteresis has elapsed.
 	return (_vehicle_status.failure_detector_status & (vehicle_status_s::FAILURE_ROLL | vehicle_status_s::FAILURE_PITCH)) != 0;
+}
+
+bool Commander::parachuteReleaseAllowedByHeight()
+{
+	float height_above_takeoff = NAN;
+	float vertical_velocity = NAN;
+	get_parachute_state(height_above_takeoff, vertical_velocity);
+
+	return PX4_ISFINITE(height_above_takeoff)
+	       && (height_above_takeoff > PARACHUTE_MIN_RELEASE_HEIGHT_ABOVE_TAKEOFF_M);
 }
 
 #if defined(BOARD_HAS_POWER_CONTROL)
@@ -1938,8 +1950,10 @@ void Commander::run()
 		_actuator_armed.manual_lockdown = _manual_lockdown_by_user || _manual_lockdown_latched_attitude_failure;
 
 		// Keep the parachute module fed with non-release packets continuously,
-		// but only send a release command while the vehicle is actually armed.
+		// but only send a release command while the vehicle is armed and has climbed
+		// sufficiently above the takeoff point.
 		const bool parachute_release_requested = isArmed()
+							&& parachuteReleaseAllowedByHeight()
 							&& (_actuator_armed.force_failsafe || _actuator_armed.manual_lockdown);
 		const uint8_t parachute_action = parachute_release_requested ? vehicle_command_s::PARACHUTE_ACTION_RELEASE :
 						 vehicle_command_s::PARACHUTE_ACTION_ENABLE;
