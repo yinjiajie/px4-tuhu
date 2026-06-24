@@ -375,6 +375,9 @@ private:
 	MapProjection _global_local_proj_ref{};
 
 	hrt_abstime			_last_utm_global_pos_com{0};
+	hrt_abstime			_last_battery_status_seen_log{0};
+	hrt_abstime			_last_battery_status_ignored_log{0};
+	hrt_abstime			_last_battery_status_log{0};
 
 	// Allocated if needed.
 	TunePublisher *_tune_publisher{nullptr};
