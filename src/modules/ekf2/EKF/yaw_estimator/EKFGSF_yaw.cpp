@@ -106,6 +106,8 @@ void EKFGSF_yaw::predict(const matrix::Vector3f &delta_ang, const float delta_an
 
 void EKFGSF_yaw::fuseVelocity(const Vector2f &vel_NE, const float vel_accuracy, const bool in_air)
 {
+	static_cast<void>(in_air);
+
 	// we don't start running the EKF part of the algorithm until there are regular velocity observations
 	if (!_ekf_gsf_vel_fuse_started) {
 
@@ -113,8 +115,9 @@ void EKFGSF_yaw::fuseVelocity(const Vector2f &vel_NE, const float vel_accuracy, 
 
 		ahrsAlignYaw();
 
-		// don't start until in air or velocity is not negligible
-		if (in_air || vel_NE.longerThan(vel_accuracy)) {
+		// Only start once horizontal velocity is observable. Starting solely based on in-air state
+		// allows the filter to converge to an arbitrary yaw during near-vertical takeoff.
+		if (vel_NE.longerThan(vel_accuracy)) {
 			_ekf_gsf_vel_fuse_started = true;
 		}
 
