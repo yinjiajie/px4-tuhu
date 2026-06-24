@@ -88,7 +88,7 @@ param set MPC_TKO_RAMP_T 2
 #UM982
 param set GPS_1_CONFIG 201
 param set GPS_1_GNSS 63
-param set GPS_1_PROTOCAL 6
+param set GPS_1_PROTOCOL 6
 param set SER_GPS1_BAUD 115200
 #end of um982
 
