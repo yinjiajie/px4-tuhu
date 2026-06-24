@@ -1723,8 +1723,22 @@ MavlinkReceiver::handle_message_ping(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_battery_status(mavlink_message_t *msg)
 {
+	if (hrt_elapsed_time(&_last_battery_status_seen_log) > 5_s) {
+		_last_battery_status_seen_log = hrt_absolute_time();
+		PX4_WARN("BATTERY_STATUS seen sys/comp %" PRIu8 "/%" PRIu8 " seq=%" PRIu8,
+			 msg->sysid, msg->compid, msg->seq);
+	}
+
 	if ((msg->sysid != mavlink_system.sysid) || (msg->compid == mavlink_system.compid)) {
 		// ignore battery status coming from other systems or from the autopilot itself
+		if (hrt_elapsed_time(&_last_battery_status_ignored_log) > 5_s) {
+			_last_battery_status_ignored_log = hrt_absolute_time();
+			PX4_WARN("BATTERY_STATUS ignored sys/comp %" PRIu8 "/%" PRIu8
+				 " (local sys/comp %" PRIu8 "/%" PRIu8 ")",
+				 msg->sysid, msg->compid,
+				 mavlink_system.sysid, mavlink_system.compid);
+		}
+
 		return;
 	}
 
@@ -1766,6 +1780,17 @@ MavlinkReceiver::handle_message_battery_status(mavlink_message_t *msg)
 
 	} else if (battery_status.remaining < _param_bat_low_thr.get()) {
 		battery_status.warning = battery_status_s::BATTERY_WARNING_LOW;
+	}
+
+	if (hrt_elapsed_time(&_last_battery_status_log) > 5_s) {
+		_last_battery_status_log = battery_status.timestamp;
+		PX4_WARN("BATTERY_STATUS rx sys/comp %" PRIu8 "/%" PRIu8 ": V=%.2fV I=%.2fA SOC=%.0f%% T=%.1fC cells=%" PRIu8,
+			 msg->sysid, msg->compid,
+			 (double)battery_status.voltage_v,
+			 (double)battery_status.current_a,
+			 (double)(battery_status.remaining * 100.f),
+			 (double)battery_status.temperature,
+			 battery_status.cell_count);
 	}
 
 	_battery_pub.publish(battery_status);
