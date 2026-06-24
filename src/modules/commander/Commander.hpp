@@ -167,6 +167,7 @@ private:
 	void updateControlMode();
 
 	bool parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const;
+	bool parachuteReleaseAllowedByHeight();
 
 	void send_parachute_command(uint8_t parachute_action, bool play_release_tune);
 	void get_parachute_state(float &height_above_takeoff, float &vertical_velocity);
