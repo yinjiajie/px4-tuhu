@@ -114,3 +114,27 @@ TEST_F(EKFYawEstimatorTest, inAirYawAlignment)
 	EXPECT_TRUE(_ekf->local_position_is_valid());
 	EXPECT_TRUE(_ekf->global_position_is_valid());
 }
+
+TEST_F(EKFYawEstimatorTest, noYawAlignmentFromVerticalTakeoffAlone)
+{
+	// GIVEN: an accelerating vehicle with unknown heading
+	EXPECT_EQ(1, (int)_ekf->control_status_flags().tilt_align);
+	EXPECT_EQ(0, (int)_ekf->control_status_flags().yaw_align);
+
+	// AND: a true heading far from North
+	const float yaw = math::radians(-130.f);
+	const Dcmf R_to_earth{Eulerf(0.f, 0.f, yaw)};
+	_sensor_simulator.setOrientation(R_to_earth);
+
+	// WHEN: the vehicle climbs nearly vertically with negligible horizontal velocity
+	_sensor_simulator.setTrajectoryTargetVelocity(Vector3f(0.f, 0.f, -1.f));
+	_ekf->set_in_air_status(true);
+	_sensor_simulator.runTrajectorySeconds(3.f);
+
+	// THEN: the GSF yaw estimator should not report a converged yaw yet
+	float yaw_est{};
+	float yaw_est_var{};
+	float dummy[5];
+	EXPECT_FALSE(_ekf->getDataEKFGSF(&yaw_est, &yaw_est_var, dummy, dummy, dummy, dummy));
+	EXPECT_EQ(0, (int)_ekf->control_status_flags().yaw_align);
+}
