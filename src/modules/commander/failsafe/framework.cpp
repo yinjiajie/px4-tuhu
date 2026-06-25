@@ -500,7 +500,7 @@ void FailsafeBase::getSelectedAction(const State &state, const failsafe_flags_s 
 		}
 
 		// We must check for mode fallback again here
-		Action mode_fallback = checkModeFallback(status_flags, modeFromAction(selected_action,
+		Action mode_fallback = checkModeFallback(state, status_flags, modeFromAction(selected_action,
 				       returned_state.updated_user_intended_mode));
 
 		if (mode_fallback > selected_action) {

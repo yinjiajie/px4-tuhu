@@ -65,7 +65,8 @@ protected:
 						 && status_flags.fd_critical_failure, ActionOptions(Action::Terminate).cannotBeDeferred());
 	}
 
-	Action checkModeFallback(const failsafe_flags_s &status_flags, uint8_t user_intended_mode) const override
+	Action checkModeFallback(const State &state, const failsafe_flags_s &status_flags,
+				 uint8_t user_intended_mode) const override
 	{
 		return Action::None;
 	}

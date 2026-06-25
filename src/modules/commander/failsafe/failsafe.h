@@ -45,7 +45,8 @@ protected:
 
 	void checkStateAndMode(const hrt_abstime &time_us, const State &state,
 			       const failsafe_flags_s &status_flags) override;
-	Action checkModeFallback(const failsafe_flags_s &status_flags, uint8_t user_intended_mode) const override;
+	Action checkModeFallback(const State &state, const failsafe_flags_s &status_flags,
+				uint8_t user_intended_mode) const override;
 
 	uint8_t modifyUserIntendedMode(Action previous_action, Action current_action,
 				       uint8_t user_intended_mode) const override;
@@ -194,4 +195,3 @@ private:
 				       );
 
 };
-

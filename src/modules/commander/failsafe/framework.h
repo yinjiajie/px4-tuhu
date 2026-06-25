@@ -206,7 +206,8 @@ protected:
 
 	virtual void checkStateAndMode(const hrt_abstime &time_us, const State &state,
 				       const failsafe_flags_s &status_flags) = 0;
-	virtual Action checkModeFallback(const failsafe_flags_s &status_flags, uint8_t user_intended_mode) const = 0;
+	virtual Action checkModeFallback(const State &state, const failsafe_flags_s &status_flags,
+					 uint8_t user_intended_mode) const = 0;
 
 	const failsafe_flags_s &lastStatusFlags() const { return _last_status_flags; }
 
@@ -284,4 +285,3 @@ private:
 				       );
 
 };
-

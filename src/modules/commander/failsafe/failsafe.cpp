@@ -540,7 +540,7 @@ void Failsafe::checkStateAndMode(const hrt_abstime &time_us, const State &state,
 
 
 	// Mode fallback (last)
-	Action mode_fallback_action = checkModeFallback(status_flags, state.user_intended_mode);
+	Action mode_fallback_action = checkModeFallback(state, status_flags, state.user_intended_mode);
 	_last_state_mode_fallback = checkFailsafe(_caller_id_mode_fallback, _last_state_mode_fallback,
 				    mode_fallback_action != Action::None,
 				    ActionOptions(mode_fallback_action).allowUserTakeover(UserTakeoverAllowed::Always).cannotBeDeferred());
@@ -560,10 +560,17 @@ void Failsafe::updateArmingState(const hrt_abstime &time_us, bool armed, const f
 	_was_armed = armed;
 }
 
-FailsafeBase::Action Failsafe::checkModeFallback(const failsafe_flags_s &status_flags,
+FailsafeBase::Action Failsafe::checkModeFallback(const State &state, const failsafe_flags_s &status_flags,
 		uint8_t user_intended_mode) const
 {
 	Action action = Action::None;
+
+	// Once already landed, don't fall back from AUTO_MISSION to RTL just because the mission got cleared.
+	if (state.landed
+	    && user_intended_mode == vehicle_status_s::NAVIGATION_STATE_AUTO_MISSION
+	    && status_flags.auto_mission_missing) {
+		return action;
+	}
 
 	// offboard signal
 	if (status_flags.offboard_control_signal_lost && (status_flags.mode_req_offboard_signal & (1u << user_intended_mode))) {
