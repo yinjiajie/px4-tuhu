@@ -3,8 +3,8 @@
 # PX4 FMUv5 specific board extras init
 #------------------------------------------------------------------------------
 
-# Free TEL1/ttyS1 in case MAVLink is still configured on that port.
-mavlink stop -d /dev/ttyS1
+# Free TEL4/ttyS3 in case MAVLink is still configured on that port.
+mavlink stop -d /dev/ttyS3
 
-# Start the RS485 parachute interface on the TEL1 serial port.
-parachute_rs485 start -d /dev/ttyS1 -b 115200
+# Start the RS485 parachute interface on the TEL4 serial port.
+parachute_rs485 start -d /dev/ttyS3 -b 115200

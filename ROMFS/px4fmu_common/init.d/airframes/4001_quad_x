@@ -88,7 +88,7 @@ param set MPC_TKO_RAMP_T 2
 #UM982
 param set GPS_1_CONFIG 201
 param set GPS_1_GNSS 63
-param set GPS_1_PROTOCOL 6
+param set GPS_1_PROTOCOL 1   #ublox
 param set SER_GPS1_BAUD 115200
 #end of um982
 
@@ -145,10 +145,10 @@ param set MAV_0_MODE 0      #normal
 param set MAV_0_RATE 1200
 param set SER_TEL3_BAUD 115200
 
-param set MAV_1_CONFIG 104  #Optical FLow
-param set MAV_1_MODE 2      #onboard
-param set MAV_1_RATE 1200
-param set SER_TEL4_BAUD 115200
+#param set MAV_1_CONFIG 104  #Optical FLow
+#param set MAV_1_MODE 2      #onboard
+#param set MAV_1_RATE 1200
+#param set SER_TEL4_BAUD 115200
 
 param set MAV_2_CONFIG 102  #3588
 param set MAV_2_MODE 2      #onboard
