@@ -32,6 +32,7 @@
  ****************************************************************************/
 
 #include <drivers/drv_hrt.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <mavlink.h>
 #include <math.h>
@@ -56,11 +57,16 @@ using device::Serial;
 
 extern "C" __EXPORT int parachute_rs485_main(int argc, char *argv[]);
 
+namespace
+{
+static constexpr px4::wq_config_t parachute_rs485_wq{"wq:parachute_rs485", 6000, -18};
+}
+
 class ParachuteRS485 : public ModuleBase<ParachuteRS485>, public px4::ScheduledWorkItem
 {
 public:
 	ParachuteRS485(const char *port, uint32_t baudrate, bool invert) :
-		ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port)),
+		ScheduledWorkItem(MODULE_NAME, parachute_rs485_wq),
 		_baudrate(baudrate),
 		_invert(invert)
 	{
@@ -198,11 +204,24 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 		const uint32_t last_rx_ms_ago = _last_rx_timestamp != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_rx_timestamp) / 1000) : 0;
 		const uint32_t last_msg_ms_ago = _last_message_timestamp != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_message_timestamp) / 1000) : 0;
 		const uint32_t last_ack_ms_ago = _last_ack_timestamp != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_ack_timestamp) / 1000) : 0;
+		const uint32_t stage_ms_ago = _stage_timestamp != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_stage_timestamp) / 1000) : 0;
+		const uint32_t last_run_start_ms_ago = _last_run_start != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_run_start) / 1000) : 0;
+		const uint32_t last_run_complete_ms_ago = _last_run_complete != 0 ? static_cast<uint32_t>(hrt_elapsed_time(&_last_run_complete) / 1000) : 0;
 
 		PX4_INFO("device: %s @ %" PRIu32, _port, _baudrate);
 		PX4_INFO("inverted: %s", _invert ? "true" : "false");
 		PX4_INFO("command_valid: %s", _command_valid ? "true" : "false");
 		PX4_INFO("connected: %s", _connected ? "true" : "false");
+		PX4_INFO("run_stage: %s stage_ms_ago: %s%" PRIu32 " iter: %" PRIu32,
+			 stage_name(_run_stage),
+			 _stage_timestamp != 0 ? "" : "n/a ",
+			 stage_ms_ago,
+			 _run_iteration);
+		PX4_INFO("last_run_start_ms_ago: %s%" PRIu32 " last_run_complete_ms_ago: %s%" PRIu32,
+			 _last_run_start != 0 ? "" : "n/a ",
+			 last_run_start_ms_ago,
+			 _last_run_complete != 0 ? "" : "n/a ",
+			 last_run_complete_ms_ago);
 		PX4_INFO("tx_count: %" PRIu32 " last_action: %.0f", _tx_count, (double)_last_command.param1);
 		PX4_INFO("rx_reads: %" PRIu32 " timeouts: %" PRIu32 " read_errors: %" PRIu32 " last_read: %" PRId32,
 			 _rx_read_count, _rx_timeout_count, _read_error_count, _last_read_result);
@@ -238,11 +257,47 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 
 private:
 	static constexpr uint32_t kUpdateInterval{100_ms};
-	// Serial::readAtLeast() uses the same timeout convention as other PX4 serial callers here: milliseconds.
+	// The Serial API names this timeout argument in microseconds, but PX4 NuttX
+	// UART callers pass millisecond-style values here and the implementation
+	// converts them through poll() accordingly.
 	static constexpr uint32_t kReplyTimeoutMs{20};
+	static constexpr hrt_abstime kReplyTimeoutUs{static_cast<hrt_abstime>(kReplyTimeoutMs) * 1000ULL};
 	static constexpr hrt_abstime kConnectionTimeout{500_ms};
 	static constexpr size_t kTxPacketMaxSize{MAVLINK_MAX_PACKET_LEN};
 	static constexpr size_t kRxBufferSize{MAVLINK_MAX_PACKET_LEN};
+
+	enum class RunStage : uint8_t {
+		Idle = 0,
+		OpenSerial,
+		UpdateCommand,
+		BuildPacket,
+		WritePacket,
+		WaitTx,
+		ReadReply,
+		ParseReply
+	};
+
+	static const char *stage_name(RunStage stage)
+	{
+		switch (stage) {
+		case RunStage::Idle: return "idle";
+		case RunStage::OpenSerial: return "open";
+		case RunStage::UpdateCommand: return "update_cmd";
+		case RunStage::BuildPacket: return "build";
+		case RunStage::WritePacket: return "write";
+		case RunStage::WaitTx: return "wait_tx";
+		case RunStage::ReadReply: return "read";
+		case RunStage::ParseReply: return "parse";
+		}
+
+		return "unknown";
+	}
+
+	void set_stage(RunStage stage)
+	{
+		_run_stage = stage;
+		_stage_timestamp = hrt_absolute_time();
+	}
 
 	bool open_serial()
 	{
@@ -274,6 +329,33 @@ private:
 		}
 
 		return true;
+	}
+
+	ssize_t read_reply_with_timeout(uint8_t *buffer, size_t buffer_size, hrt_abstime timeout_us)
+	{
+		const hrt_abstime deadline = hrt_absolute_time() + timeout_us;
+		size_t total_bytes_read = 0;
+
+		while (hrt_absolute_time() < deadline && total_bytes_read < buffer_size) {
+			const ssize_t ret = _serial->read(&buffer[total_bytes_read], buffer_size - total_bytes_read);
+
+			if (ret > 0) {
+				total_bytes_read += static_cast<size_t>(ret);
+				continue;
+			}
+
+			if ((ret < 0) && (errno != EAGAIN) && (errno != EWOULDBLOCK) && (errno != EINTR)) {
+				return -1;
+			}
+
+			if (total_bytes_read > 0) {
+				break;
+			}
+
+			px4_usleep(1_ms);
+		}
+
+		return static_cast<ssize_t>(total_bytes_read);
 	}
 
 	void close_serial()
@@ -325,6 +407,9 @@ private:
 
 	void Run() override
 	{
+		_last_run_start = hrt_absolute_time();
+		++_run_iteration;
+
 		if (should_exit()) {
 			ScheduleClear();
 			close_serial();
@@ -332,22 +417,28 @@ private:
 			return;
 		}
 
+		set_stage(RunStage::OpenSerial);
 		if (!open_serial()) {
 			publish_disconnected_if_needed(hrt_absolute_time());
 			return;
 		}
 
+		set_stage(RunStage::UpdateCommand);
 		update_command();
 
 		if (!_command_valid) {
 			publish_disconnected_if_needed(hrt_absolute_time());
+			set_stage(RunStage::Idle);
+			_last_run_complete = hrt_absolute_time();
 			return;
 		}
 
 		const hrt_abstime now = hrt_absolute_time();
+		set_stage(RunStage::BuildPacket);
 		const size_t tx_size = build_tx_mavlink_packet(_last_command, _tx_packet);
 		_last_tx_size = tx_size;
 
+		set_stage(RunStage::WritePacket);
 		if (_serial->write(_tx_packet, tx_size) != static_cast<ssize_t>(tx_size)) {
 			PX4_WARN("write failed");
 			close_serial();
@@ -359,9 +450,11 @@ private:
 		// Serial::flush() maps to tcflush(TCIOFLUSH) on NuttX and drops queued TX/RX data.
 		// That breaks half-duplex request/reply exchanges on UART-backed RS485 adapters.
 		const uint32_t tx_wire_time_us = 500 + static_cast<uint32_t>((tx_size * 1000000ULL * 10) / _baudrate);
+		set_stage(RunStage::WaitTx);
 		px4_usleep(tx_wire_time_us);
 
-		const ssize_t bytes_read = _serial->readAtLeast(_rx_buffer, sizeof(_rx_buffer), 1, kReplyTimeoutMs);
+		set_stage(RunStage::ReadReply);
+		const ssize_t bytes_read = read_reply_with_timeout(_rx_buffer, sizeof(_rx_buffer), kReplyTimeoutUs);
 		_last_read_result = static_cast<int32_t>(bytes_read);
 
 		if (bytes_read > 0) {
@@ -373,9 +466,10 @@ private:
 			const uint8_t buffer_overrun_before = _mavlink_parse_status.buffer_overrun;
 			const uint16_t packet_drop_before = _mavlink_parse_status.packet_rx_drop_count;
 
+			set_stage(RunStage::ParseReply);
 			for (ssize_t i = 0; i < bytes_read; ++i) {
 				if (mavlink_frame_char_buffer(&_mavlink_rx_buffer, &_mavlink_rx_status, _rx_buffer[i], &_mavlink_message,
-							     &_mavlink_parse_status)) {
+								     &_mavlink_parse_status)) {
 					++_rx_message_count;
 					_last_msgid = _mavlink_message.msgid;
 					_last_msgid_valid = true;
@@ -398,6 +492,9 @@ private:
 			++_rx_timeout_count;
 			publish_disconnected_if_needed(now);
 		}
+
+		set_stage(RunStage::Idle);
+		_last_run_complete = hrt_absolute_time();
 	}
 
 	void update_command()
@@ -566,9 +663,14 @@ private:
 	hrt_abstime _last_rx_timestamp{0};
 	hrt_abstime _last_message_timestamp{0};
 	hrt_abstime _last_ack_timestamp{0};
+	hrt_abstime _stage_timestamp{0};
+	hrt_abstime _last_run_start{0};
+	hrt_abstime _last_run_complete{0};
 	bool _command_valid{false};
 	bool _connected{false};
+	RunStage _run_stage{RunStage::Idle};
 	uint32_t _tx_count{0};
+	uint32_t _run_iteration{0};
 	uint32_t _rx_read_count{0};
 	uint32_t _rx_timeout_count{0};
 	uint32_t _read_error_count{0};
