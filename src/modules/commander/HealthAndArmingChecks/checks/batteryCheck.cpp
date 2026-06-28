@@ -33,6 +33,8 @@
 
 #include "batteryCheck.hpp"
 
+#include <float.h>
+#include <mathlib/math/Functions.hpp>
 #include <px4_platform_common/events.h>
 
 using namespace time_literals;
@@ -84,6 +86,35 @@ static constexpr const char *battery_mode_str(battery_mode_t battery_mode)
 
 	default: return "unknown";
 	}
+}
+
+float BatteryChecks::estimateRemainingTimeToReserve(const battery_status_s &battery) const
+{
+	if (!PX4_ISFINITE(battery.remaining) || battery.capacity == 0) {
+		return NAN;
+	}
+
+	const float current_a = PX4_ISFINITE(battery.current_average_a) && battery.current_average_a > FLT_EPSILON ?
+				battery.current_average_a :
+				(PX4_ISFINITE(battery.current_filtered_a) && battery.current_filtered_a > FLT_EPSILON ?
+				 battery.current_filtered_a :
+				 battery.current_a);
+
+	if (!PX4_ISFINITE(current_a) || current_a <= FLT_EPSILON) {
+		return NAN;
+	}
+
+	const float remaining_soc = math::constrain(battery.remaining, 0.f, 1.f);
+	const float reserve_soc = math::constrain(_param_bat_low_thr.get(), 0.f, 0.99f);
+	const float usable_soc = remaining_soc - reserve_soc;
+
+	if (usable_soc <= 0.f) {
+		return 0.f;
+	}
+
+	const float remaining_capacity_mah = usable_soc * battery.capacity;
+	const float current_ma = current_a * 1e3f;
+	return remaining_capacity_mah / current_ma * 3600.f;
 }
 
 
@@ -191,10 +222,18 @@ void BatteryChecks::checkAndReport(const Context &context, Report &reporter)
 				}
 			}
 
-			if (PX4_ISFINITE(battery.time_remaining_s)
+			// Prefer a local estimate to the configured reserve threshold, then fall back to the
+			// externally-provided time-to-empty value if that's all we have.
+			float battery_time_s = estimateRemainingTimeToReserve(battery);
+
+			if (!PX4_ISFINITE(battery_time_s)) {
+				battery_time_s = battery.time_remaining_s;
+			}
+
+			if (PX4_ISFINITE(battery_time_s)
 			    && (!PX4_ISFINITE(worst_battery_time_s)
-				|| (PX4_ISFINITE(worst_battery_time_s) && (battery.time_remaining_s < worst_battery_time_s)))) {
-				worst_battery_time_s = battery.time_remaining_s;
+				|| (PX4_ISFINITE(worst_battery_time_s) && (battery_time_s < worst_battery_time_s)))) {
+				worst_battery_time_s = battery_time_s;
 			}
 		}
 	}

@@ -55,6 +55,8 @@
 #include <lib/drivers/accelerometer/PX4Accelerometer.hpp>
 #include <lib/drivers/gyroscope/PX4Gyroscope.hpp>
 #include <lib/drivers/magnetometer/PX4Magnetometer.hpp>
+#include <lib/mathlib/math/filter/AlphaFilter.hpp>
+#include <lib/parameters/param.h>
 #include <lib/systemlib/mavlink_log.h>
 #include <px4_platform_common/module_params.h>
 #include <uORB/Publication.hpp>
@@ -378,6 +380,12 @@ private:
 	hrt_abstime			_last_battery_status_seen_log{0};
 	hrt_abstime			_last_battery_status_ignored_log{0};
 	hrt_abstime			_last_battery_status_log{0};
+	hrt_abstime			_last_external_battery_status{0};
+	AlphaFilter<float>		_external_battery_current_average_filter_a{};
+	param_t				_param_bat1_capacity_handle{PARAM_INVALID};
+	param_t				_param_bat_avrg_current_handle{PARAM_INVALID};
+	float				_param_bat1_capacity{-1.f};
+	float				_param_bat_avrg_current{15.f};
 
 	// Allocated if needed.
 	TunePublisher *_tune_publisher{nullptr};

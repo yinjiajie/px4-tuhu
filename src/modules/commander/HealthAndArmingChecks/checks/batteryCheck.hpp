@@ -49,6 +49,7 @@ public:
 	void checkAndReport(const Context &context, Report &reporter) override;
 
 private:
+	float estimateRemainingTimeToReserve(const battery_status_s &battery) const;
 	void rtlEstimateCheck(const Context &context, Report &reporter, float worst_battery_time_s);
 
 	uORB::SubscriptionMultiArray<battery_status_s, battery_status_s::MAX_INSTANCES> _battery_status_subs{ORB_ID::battery_status};
@@ -57,6 +58,7 @@ private:
 	bool _battery_connected_at_arming[battery_status_s::MAX_INSTANCES] {};
 
 	DEFINE_PARAMETERS_CUSTOM_PARENT(HealthAndArmingCheckBase,
+					(ParamFloat<px4::params::BAT_LOW_THR>) _param_bat_low_thr,
 					(ParamFloat<px4::params::COM_ARM_BAT_MIN>) _param_arm_battery_level_min
 				       )
 };
