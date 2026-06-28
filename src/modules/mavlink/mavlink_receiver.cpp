@@ -133,8 +133,49 @@ MavlinkReceiver::acknowledge(uint8_t sysid, uint8_t compid, uint16_t command, ui
 }
 
 void
+MavlinkReceiver::debug_log_external_msgid(const mavlink_message_t &message)
+{
+	if ((message.sysid != mavlink_system.sysid) || (message.compid == mavlink_system.compid)) {
+		return;
+	}
+
+	ExternalMsgIdLogEntry *entry = nullptr;
+	ExternalMsgIdLogEntry *replacement = &_external_msgid_log_entries[0];
+
+	for (auto &candidate : _external_msgid_log_entries) {
+		if ((candidate.msgid == message.msgid) && (candidate.sysid == message.sysid) && (candidate.compid == message.compid)) {
+			entry = &candidate;
+			break;
+		}
+
+		const bool candidate_unused = candidate.msgid == UINT32_MAX;
+		const bool replacement_unused = replacement->msgid == UINT32_MAX;
+
+		if (candidate_unused || (!replacement_unused && (candidate.last_log < replacement->last_log))) {
+			replacement = &candidate;
+		}
+	}
+
+	if (entry == nullptr) {
+		entry = replacement;
+		entry->msgid = message.msgid;
+		entry->sysid = message.sysid;
+		entry->compid = message.compid;
+		entry->last_log = 0;
+	}
+
+	if (hrt_elapsed_time(&entry->last_log) > 5_s) {
+		entry->last_log = hrt_absolute_time();
+		PX4_WARN("MAVLink ext msgid=%" PRIu32 " sys/comp %" PRIu8 "/%" PRIu8 " seq=%" PRIu8,
+			 message.msgid, message.sysid, message.compid, message.seq);
+	}
+}
+
+void
 MavlinkReceiver::handle_message(mavlink_message_t *msg)
 {
+	debug_log_external_msgid(*msg);
+
 	switch (msg->msgid) {
 	case MAVLINK_MSG_ID_COMMAND_LONG:
 		handle_message_command_long(msg);

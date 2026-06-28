@@ -238,6 +238,7 @@ private:
 
 	void update_message_statistics(const mavlink_message_t &message);
 	void update_rx_stats(const mavlink_message_t &message);
+	void debug_log_external_msgid(const mavlink_message_t &message);
 
 	px4::atomic_bool 	_should_exit{false};
 	pthread_t		_thread {};
@@ -374,10 +375,20 @@ private:
 	float _global_local_alt0{NAN};
 	MapProjection _global_local_proj_ref{};
 
+	static constexpr int MAX_EXTERNAL_MSGID_LOG_ENTRIES{16};
+
+	struct ExternalMsgIdLogEntry {
+		uint32_t msgid{UINT32_MAX};
+		uint8_t sysid{0};
+		uint8_t compid{0};
+		hrt_abstime last_log{0};
+	};
+
 	hrt_abstime			_last_utm_global_pos_com{0};
 	hrt_abstime			_last_battery_status_seen_log{0};
 	hrt_abstime			_last_battery_status_ignored_log{0};
 	hrt_abstime			_last_battery_status_log{0};
+	ExternalMsgIdLogEntry		_external_msgid_log_entries[MAX_EXTERNAL_MSGID_LOG_ENTRIES] {};
 
 	// Allocated if needed.
 	TunePublisher *_tune_publisher{nullptr};
