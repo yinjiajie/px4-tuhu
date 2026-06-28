@@ -42,8 +42,10 @@
 
 #include <lib/airspeed/airspeed.h>
 #include <lib/conversion/rotation.h>
+#include <mathlib/math/Functions.hpp>
 #include <lib/systemlib/px4_macros.h>
 
+#include <float.h>
 #include <math.h>
 #include <poll.h>
 
@@ -115,6 +117,9 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_parameters_manager(parent),
 	_mavlink_timesync(parent)
 {
+	_param_bat1_capacity_handle = param_find("BAT1_CAPACITY");
+	_param_bat_avrg_current_handle = param_find("BAT_AVRG_CURRENT");
+	updateParams();
 }
 
 void
@@ -1760,29 +1765,70 @@ MavlinkReceiver::handle_message_battery_status(mavlink_message_t *msg)
 
 	battery_status.voltage_v = voltage_sum;
 	battery_status.voltage_filtered_v  = voltage_sum;
-	battery_status.current_a = (float)(battery_mavlink.current_battery) / 100.0f;
+	const bool current_valid = battery_mavlink.current_battery >= 0;
+	battery_status.current_a = current_valid ? (float)(battery_mavlink.current_battery) / 100.0f : NAN;
 	battery_status.current_filtered_a = battery_status.current_a;
-	battery_status.remaining = (float)battery_mavlink.battery_remaining / 100.0f;
+
+	if (current_valid) {
+		if (_last_external_battery_status != 0) {
+			const float dt = math::max((battery_status.timestamp - _last_external_battery_status) / 1e6f, 0.01f);
+			_external_battery_current_average_filter_a.setParameters(dt, 50.f);
+		}
+
+		if (!PX4_ISFINITE(_external_battery_current_average_filter_a.getState())
+		    || _external_battery_current_average_filter_a.getState() < FLT_EPSILON) {
+			const float initial_current_a = (_param_bat_avrg_current > FLT_EPSILON) ?
+							_param_bat_avrg_current :
+							math::max(battery_status.current_a, 0.f);
+			_external_battery_current_average_filter_a.reset(initial_current_a);
+		}
+
+		battery_status.current_average_a = _external_battery_current_average_filter_a.update(math::max(battery_status.current_a, 0.f));
+
+	} else {
+		battery_status.current_average_a = NAN;
+	}
+
+	battery_status.remaining = (battery_mavlink.battery_remaining >= 0) ?
+				   math::constrain((float)battery_mavlink.battery_remaining / 100.0f, 0.f, 1.f) :
+				   NAN;
 	battery_status.discharged_mah = (float)battery_mavlink.current_consumed;
-	// MAVLink BATTERY_STATUS uses 0 to mean "remaining time estimate unavailable".
-	battery_status.time_remaining_s = (battery_mavlink.time_remaining > 0) ?
-					  (float)battery_mavlink.time_remaining :
-					  NAN;
 	battery_status.cell_count = cell_count;
+	battery_status.capacity = (_param_bat1_capacity > 0.f) ?
+				  static_cast<uint16_t>(math::min(_param_bat1_capacity, (float)UINT16_MAX)) :
+				  0;
+	// MAVLink BATTERY_STATUS uses 0 to mean "remaining time estimate unavailable".
+	if (battery_mavlink.time_remaining > 0) {
+		battery_status.time_remaining_s = (float)battery_mavlink.time_remaining;
+
+	} else if (PX4_ISFINITE(battery_status.remaining)
+		   && battery_status.capacity > 0
+		   && PX4_ISFINITE(battery_status.current_average_a)
+		   && battery_status.current_average_a > FLT_EPSILON) {
+		const float remaining_capacity_mah = battery_status.remaining * battery_status.capacity;
+		const float current_ma = battery_status.current_average_a * 1e3f;
+		battery_status.time_remaining_s = remaining_capacity_mah / current_ma * 3600.f;
+
+	} else {
+		battery_status.time_remaining_s = NAN;
+	}
+
 	battery_status.temperature = (battery_mavlink.temperature == INT16_MAX) ?
 				     NAN :
 				     (float)battery_mavlink.temperature / 100.0f;
 	battery_status.connected = true;
+	battery_status.source = battery_status_s::BATTERY_SOURCE_EXTERNAL;
+	_last_external_battery_status = battery_status.timestamp;
 
 	// Set the battery warning based on remaining charge.
 	//  Note: Smallest values must come first in evaluation.
-	if (battery_status.remaining < _param_bat_emergen_thr.get()) {
+	if (PX4_ISFINITE(battery_status.remaining) && battery_status.remaining < _param_bat_emergen_thr.get()) {
 		battery_status.warning = battery_status_s::BATTERY_WARNING_EMERGENCY;
 
-	} else if (battery_status.remaining < _param_bat_crit_thr.get()) {
+	} else if (PX4_ISFINITE(battery_status.remaining) && battery_status.remaining < _param_bat_crit_thr.get()) {
 		battery_status.warning = battery_status_s::BATTERY_WARNING_CRITICAL;
 
-	} else if (battery_status.remaining < _param_bat_low_thr.get()) {
+	} else if (PX4_ISFINITE(battery_status.remaining) && battery_status.remaining < _param_bat_low_thr.get()) {
 		battery_status.warning = battery_status_s::BATTERY_WARNING_LOW;
 	}
 
@@ -3477,6 +3523,14 @@ MavlinkReceiver::updateParams()
 {
 	// update parameters from storage
 	ModuleParams::updateParams();
+
+	if (_param_bat1_capacity_handle != PARAM_INVALID) {
+		param_get(_param_bat1_capacity_handle, &_param_bat1_capacity);
+	}
+
+	if (_param_bat_avrg_current_handle != PARAM_INVALID) {
+		param_get(_param_bat_avrg_current_handle, &_param_bat_avrg_current);
+	}
 }
 
 void *MavlinkReceiver::start_trampoline(void *context)
