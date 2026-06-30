@@ -1754,6 +1754,9 @@ MavlinkReceiver::handle_message_battery_status(mavlink_message_t *msg)
 	battery_status_s battery_status{};
 	battery_status.timestamp = hrt_absolute_time();
 
+	actuator_armed_s actuator_armed{};
+	const bool is_armed = _actuator_armed_sub.copy(&actuator_armed) && actuator_armed.armed;
+
 	float voltage_sum = 0.0f;
 	uint8_t cell_count = 0;
 
@@ -1783,7 +1786,14 @@ MavlinkReceiver::handle_message_battery_status(mavlink_message_t *msg)
 			_external_battery_current_average_filter_a.reset(initial_current_a);
 		}
 
-		battery_status.current_average_a = _external_battery_current_average_filter_a.update(math::max(battery_status.current_a, 0.f));
+		if (is_armed) {
+			battery_status.current_average_a = _external_battery_current_average_filter_a.update(math::max(battery_status.current_a, 0.f));
+
+		} else {
+			// Keep the configured in-flight current estimate while disarmed so pre-arm remaining time
+			// stays meaningful and is not trained by low idle current.
+			battery_status.current_average_a = _external_battery_current_average_filter_a.getState();
+		}
 
 	} else {
 		battery_status.current_average_a = NAN;
