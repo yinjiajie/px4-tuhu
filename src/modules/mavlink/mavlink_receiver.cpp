@@ -1769,7 +1769,7 @@ MavlinkReceiver::handle_message_battery_status(mavlink_message_t *msg)
 	battery_status.voltage_v = voltage_sum;
 	battery_status.voltage_filtered_v  = voltage_sum;
 	const bool current_valid = battery_mavlink.current_battery >= 0;
-	battery_status.current_a = current_valid ? (float)(battery_mavlink.current_battery) / 100.0f : NAN;
+	battery_status.current_a = current_valid ? (float)(battery_mavlink.current_battery * 1.3f) / 100.0f : NAN;
 	battery_status.current_filtered_a = battery_status.current_a;
 
 	if (current_valid) {
