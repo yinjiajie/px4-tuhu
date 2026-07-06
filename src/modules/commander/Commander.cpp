@@ -100,7 +100,7 @@ static constexpr bool operator ==(const actuator_armed_s &a, const actuator_arme
 }
 static_assert(sizeof(actuator_armed_s) == 16, "actuator_armed equality operator review");
 
-static constexpr float PARACHUTE_MIN_RELEASE_HEIGHT_ABOVE_TAKEOFF_M = 10.f;
+static constexpr float PARACHUTE_MIN_RELEASE_HEIGHT_ABOVE_TAKEOFF_M = 15.f;
 
 bool Commander::parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const
 {
