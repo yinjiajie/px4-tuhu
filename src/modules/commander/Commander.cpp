@@ -101,6 +101,7 @@ static constexpr bool operator ==(const actuator_armed_s &a, const actuator_arme
 static_assert(sizeof(actuator_armed_s) == 16, "actuator_armed equality operator review");
 
 static constexpr float PARACHUTE_MIN_RELEASE_HEIGHT_ABOVE_TAKEOFF_M = 15.f;
+static constexpr float PARACHUTE_MIN_RELEASE_TOTAL_SPEED_M_S = 0.5f;
 
 bool Commander::parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const
 {
@@ -127,6 +128,20 @@ bool Commander::parachuteReleaseAllowedByHeight()
 
 	return PX4_ISFINITE(height_above_takeoff)
 	       && (height_above_takeoff > PARACHUTE_MIN_RELEASE_HEIGHT_ABOVE_TAKEOFF_M);
+}
+
+bool Commander::parachuteReleaseAllowedByTotalSpeed()
+{
+	_vehicle_local_position_sub.update();
+	const vehicle_local_position_s &local_position = _vehicle_local_position_sub.get();
+
+	if (local_position.v_xy_valid && local_position.v_z_valid
+	    && PX4_ISFINITE(local_position.vx) && PX4_ISFINITE(local_position.vy) && PX4_ISFINITE(local_position.vz)) {
+		const float total_speed = sqrtf(sq(local_position.vx) + sq(local_position.vy) + sq(local_position.vz));
+		return total_speed > PARACHUTE_MIN_RELEASE_TOTAL_SPEED_M_S;
+	}
+
+	return false;
 }
 
 #if defined(BOARD_HAS_POWER_CONTROL)
@@ -1949,12 +1964,15 @@ void Commander::run()
 
 		_actuator_armed.manual_lockdown = _manual_lockdown_by_user || _manual_lockdown_latched_attitude_failure;
 
+		const bool parachute_release_requested_by_lockdown = _manual_lockdown_latched_attitude_failure
+				|| (_manual_lockdown_by_user && parachuteReleaseAllowedByTotalSpeed());
+
 		// Keep the parachute module fed with non-release packets continuously,
 		// but only send a release command while the vehicle is armed and has climbed
 		// sufficiently above the takeoff point.
 		const bool parachute_release_requested = isArmed()
 							&& parachuteReleaseAllowedByHeight()
-							&& (_actuator_armed.force_failsafe || _actuator_armed.manual_lockdown);
+							&& (_actuator_armed.force_failsafe || parachute_release_requested_by_lockdown);
 		const uint8_t parachute_action = parachute_release_requested ? vehicle_command_s::PARACHUTE_ACTION_RELEASE :
 						 vehicle_command_s::PARACHUTE_ACTION_ENABLE;
 		const bool parachute_action_changed = !_last_parachute_action_valid || (_last_parachute_action != parachute_action);
