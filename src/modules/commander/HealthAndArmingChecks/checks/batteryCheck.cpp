@@ -40,6 +40,8 @@
 using namespace time_literals;
 
 using battery_fault_reason_t = events::px4::enums::battery_fault_reason_t;
+static constexpr hrt_abstime battery_status_unhealthy_timeout = 10_s;
+
 static_assert(battery_status_s::BATTERY_FAULT_COUNT == (static_cast<uint8_t>(battery_fault_reason_t::_max) + 1)
 	      , "Battery fault flags mismatch!");
 
@@ -292,7 +294,7 @@ void BatteryChecks::checkAndReport(const Context &context, Report &reporter)
 
 	reporter.failsafeFlags().battery_unhealthy =
 		// All connected batteries are regularly being published
-		hrt_elapsed_time(&oldest_update) > 5_s
+		hrt_elapsed_time(&oldest_update) > battery_status_unhealthy_timeout
 		// There is at least one connected battery (in any slot)
 		|| num_connected_batteries < battery_required_count
 		// No currently-connected batteries have any fault
