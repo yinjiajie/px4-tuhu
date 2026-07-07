@@ -77,6 +77,13 @@ void Ekf::controlOpticalFlowFusion(const imuSample &imu_delayed)
 					&& (_control_status.flags.inertial_dead_reckoning // is doing inertial dead-reckoning so must constrain drift urgently
 					|| isOnlyActiveSourceOfHorizontalAiding(_control_status.flags.opt_flow));
 
+		// Only allow optical flow aiding as a fallback when GNSS horizontal aiding is not healthy.
+		const bool gps_recently_passing_checks = !isTimedOut(_last_gps_pass_us, _params.reset_timeout_max);
+		const bool gps_is_healthy_for_horizontal_aiding = _control_status.flags.gps
+							      && gps_recently_passing_checks
+							      && !_gps_intermittent;
+		const bool allow_optical_flow_aiding = !gps_is_healthy_for_horizontal_aiding || is_flow_required;
+
 		// Fuse optical flow LOS rate observations into the main filter only if height above ground has been updated recently
 		// use a relaxed time criteria to enable it to coast through bad range finder data
 		const bool range_finder_recent = isRecent(_aid_src_terrain_range_finder.time_last_fuse, (uint64_t)10e6);
@@ -92,6 +99,7 @@ void Ekf::controlOpticalFlowFusion(const imuSample &imu_delayed)
 
 		const bool continuing_conditions_passing = (_params.flow_ctrl == 1)
 							   && _control_status.flags.tilt_align
+							   && allow_optical_flow_aiding
 							   && (terrain_available || is_flow_required)
 							   && optical_flow_height_allowed;
 
