@@ -155,23 +155,6 @@ UavcanEscController::esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavca
 	const uint8_t node_id = msg.getSrcNodeID().get();
 	const int status_index = get_status_index_for_node_id(node_id, msg.esc_index);
 	const hrt_abstime now = hrt_absolute_time();
-	static hrt_abstime last_debug_print{0};
-	static uint32_t rx_count{0};
-
-	++rx_count;
-
-	if (now - last_debug_print >= 1_s) {
-		last_debug_print = now;
-		PX4_WARN("UAVCAN ESC status rx: msgs=%u node=%u esc_index=%u slot=%d voltage=%.2f current=%.2f temperature=%.2f rpm=%d",
-			 static_cast<unsigned>(rx_count),
-			 node_id,
-			 static_cast<unsigned>(msg.esc_index),
-			 status_index,
-			 static_cast<double>(msg.voltage),
-			 static_cast<double>(msg.current),
-			 static_cast<double>(msg.temperature),
-			 static_cast<int>(msg.rpm));
-	}
 
 	if (status_index < esc_status_s::CONNECTED_ESC_MAX) {
 		auto &ref = _esc_status.esc[status_index];
