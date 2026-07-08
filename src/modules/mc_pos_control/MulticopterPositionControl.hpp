@@ -111,6 +111,7 @@ private:
 	hrt_abstime _time_position_control_enabled{0};
 
 	trajectory_setpoint_s _setpoint{PositionControl::empty_trajectory_setpoint};
+	trajectory_setpoint_s _last_valid_offboard_setpoint{PositionControl::empty_trajectory_setpoint};
 	vehicle_control_mode_s _vehicle_control_mode{};
 
 	vehicle_constraints_s _vehicle_constraints {
@@ -172,29 +173,32 @@ private:
 		(ParamFloat<px4::params::MPC_ACC_DOWN_MAX>) _param_mpc_acc_down_max,
 		(ParamFloat<px4::params::MPC_ACC_UP_MAX>)   _param_mpc_acc_up_max,
 		(ParamFloat<px4::params::MPC_ACC_HOR_MAX>)  _param_mpc_acc_hor_max,
-		(ParamFloat<px4::params::MPC_JERK_AUTO>)    _param_mpc_jerk_auto,
-		(ParamFloat<px4::params::MPC_JERK_MAX>)     _param_mpc_jerk_max,
-		(ParamFloat<px4::params::MPC_MAN_Y_MAX>)    _param_mpc_man_y_max,
-		(ParamFloat<px4::params::MPC_MAN_Y_TAU>)    _param_mpc_man_y_tau,
+			(ParamFloat<px4::params::MPC_JERK_AUTO>)     _param_mpc_jerk_auto,
+			(ParamFloat<px4::params::MPC_JERK_MAX>)      _param_mpc_jerk_max,
+			(ParamFloat<px4::params::MPC_MAN_Y_MAX>)     _param_mpc_man_y_max,
+			(ParamFloat<px4::params::MPC_MAN_Y_TAU>)     _param_mpc_man_y_tau,
 
-		(ParamFloat<px4::params::MPC_XY_VEL_ALL>)   _param_mpc_xy_vel_all,
-		(ParamFloat<px4::params::MPC_Z_VEL_ALL>)    _param_mpc_z_vel_all,
+			(ParamFloat<px4::params::MPC_XY_VEL_ALL>)    _param_mpc_xy_vel_all,
+			(ParamFloat<px4::params::MPC_Z_VEL_ALL>)     _param_mpc_z_vel_all,
 
-		(ParamFloat<px4::params::MPC_XY_ERR_MAX>) _param_mpc_xy_err_max,
-		(ParamFloat<px4::params::MPC_YAWRAUTO_MAX>) _param_mpc_yawrauto_max,
-		(ParamFloat<px4::params::MPC_YAWRAUTO_ACC>) _param_mpc_yawrauto_acc
-	);
+			(ParamFloat<px4::params::MPC_XY_ERR_MAX>)    _param_mpc_xy_err_max,
+			(ParamFloat<px4::params::MPC_OFFB_JUMP_XY>)  _param_mpc_offb_jump_xy,
+			(ParamFloat<px4::params::MPC_OFFB_JUMP_Z>)   _param_mpc_offb_jump_z,
+			(ParamFloat<px4::params::MPC_YAWRAUTO_MAX>)  _param_mpc_yawrauto_max,
+			(ParamFloat<px4::params::MPC_YAWRAUTO_ACC>)  _param_mpc_yawrauto_acc
+		);
 
-	control::BlockDerivative _vel_x_deriv; /**< velocity derivative in x */
-	control::BlockDerivative _vel_y_deriv; /**< velocity derivative in y */
-	control::BlockDerivative _vel_z_deriv; /**< velocity derivative in z */
+		control::BlockDerivative _vel_x_deriv; /**< velocity derivative in x */
+		control::BlockDerivative _vel_y_deriv; /**< velocity derivative in y */
+		control::BlockDerivative _vel_z_deriv; /**< velocity derivative in z */
 
-	GotoControl _goto_control; ///< class for handling smooth goto position setpoints
-	PositionControl _control; ///< class for core PID position control
+		GotoControl _goto_control; ///< class for handling smooth goto position setpoints
+		PositionControl _control; ///< class for core PID position control
 
-	hrt_abstime _last_warn{0}; /**< timer when the last warn message was sent out */
+		hrt_abstime _last_warn{0}; /**< timer when the last warn message was sent out */
 
-	bool _hover_thrust_initialized{false};
+		bool _hover_thrust_initialized{false};
+		bool _offboard_setpoint_initialized{false};
 
 	/** Timeout in us for trajectory data to get considered invalid */
 	static constexpr uint64_t TRAJECTORY_STREAM_TIMEOUT_US = 500_ms;
@@ -241,4 +245,10 @@ private:
 	 */
 	void adjustSetpointForEKFResets(const vehicle_local_position_s &vehicle_local_position,
 					trajectory_setpoint_s &setpoint);
+
+	/**
+	 * Reject large offboard position setpoint jumps and hold the last accepted setpoint.
+	 */
+		void protectOffboardSetpoint(const hrt_abstime &now, const PositionControlStates &states, bool new_setpoint,
+					     trajectory_setpoint_s &setpoint);
 };

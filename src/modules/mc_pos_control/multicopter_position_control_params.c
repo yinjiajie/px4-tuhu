@@ -85,3 +85,35 @@ PARAM_DEFINE_FLOAT(MPC_THR_XY_MARG, 0.3f);
  * @group Multicopter Position Control
  */
 PARAM_DEFINE_FLOAT(MPC_VELD_LP, 5.0f);
+
+/**
+ * Offboard XY setpoint jump rejection threshold
+ *
+ * Reject offboard position setpoints whose horizontal jump from the last accepted
+ * setpoint exceeds this threshold. The rejected sample is replaced by the last
+ * accepted offboard setpoint. Set to 0 to disable.
+ *
+ * @unit m
+ * @min 0
+ * @max 20
+ * @decimal 1
+ * @increment 0.1
+ * @group Multicopter Position Control
+ */
+PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_XY, 0.0f);
+
+/**
+ * Offboard Z setpoint jump rejection threshold
+ *
+ * Reject offboard position setpoints whose vertical jump from the last accepted
+ * setpoint exceeds this threshold. The rejected sample is replaced by the last
+ * accepted offboard setpoint. Set to 0 to disable.
+ *
+ * @unit m
+ * @min 0
+ * @max 20
+ * @decimal 1
+ * @increment 0.1
+ * @group Multicopter Position Control
+ */
+PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_Z, 0.0f);

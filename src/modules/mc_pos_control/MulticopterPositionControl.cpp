@@ -356,6 +356,7 @@ void MulticopterPositionControl::Run()
 
 		if (_vehicle_control_mode_sub.updated()) {
 			const bool previous_position_control_enabled = _vehicle_control_mode.flag_multicopter_position_control_enabled;
+			const bool previous_offboard_enabled = _vehicle_control_mode.flag_control_offboard_enabled;
 
 			if (_vehicle_control_mode_sub.update(&_vehicle_control_mode)) {
 				if (!previous_position_control_enabled && _vehicle_control_mode.flag_multicopter_position_control_enabled) {
@@ -364,6 +365,11 @@ void MulticopterPositionControl::Run()
 				} else if (previous_position_control_enabled && !_vehicle_control_mode.flag_multicopter_position_control_enabled) {
 					// clear existing setpoint when controller is no longer active
 					_setpoint = PositionControl::empty_trajectory_setpoint;
+				}
+
+				if (previous_offboard_enabled && !_vehicle_control_mode.flag_control_offboard_enabled) {
+					_last_valid_offboard_setpoint = PositionControl::empty_trajectory_setpoint;
+					_offboard_setpoint_initialized = false;
 				}
 			}
 		}
@@ -388,9 +394,10 @@ void MulticopterPositionControl::Run()
 			_goto_control.update(dt, states.position, states.yaw);
 		}
 
-		_trajectory_setpoint_sub.update(&_setpoint);
+		const bool new_setpoint = _trajectory_setpoint_sub.update(&_setpoint);
 
 		adjustSetpointForEKFResets(vehicle_local_position, _setpoint);
+		protectOffboardSetpoint(vehicle_local_position.timestamp_sample, states, new_setpoint, _setpoint);
 
 		if (_vehicle_control_mode.flag_multicopter_position_control_enabled) {
 			// set failsafe setpoint if there hasn't been a new
@@ -559,6 +566,113 @@ void MulticopterPositionControl::Run()
 	perf_end(_cycle_perf);
 }
 
+void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now, const PositionControlStates &states,
+		bool new_setpoint, trajectory_setpoint_s &setpoint)
+{
+	if (!_vehicle_control_mode.flag_control_offboard_enabled) {
+		return;
+	}
+
+	if (!new_setpoint) {
+		return;
+	}
+
+	bool rejected_xy = false;
+	bool rejected_z = false;
+	float xy_jump = NAN;
+	float z_jump = NAN;
+
+	const auto reject_xy_to_last = [&]() {
+		setpoint.position[0] = _last_valid_offboard_setpoint.position[0];
+		setpoint.position[1] = _last_valid_offboard_setpoint.position[1];
+		setpoint.velocity[0] = _last_valid_offboard_setpoint.velocity[0];
+		setpoint.velocity[1] = _last_valid_offboard_setpoint.velocity[1];
+		setpoint.acceleration[0] = _last_valid_offboard_setpoint.acceleration[0];
+		setpoint.acceleration[1] = _last_valid_offboard_setpoint.acceleration[1];
+		setpoint.jerk[0] = _last_valid_offboard_setpoint.jerk[0];
+		setpoint.jerk[1] = _last_valid_offboard_setpoint.jerk[1];
+		rejected_xy = true;
+	};
+
+	const auto reject_z_to_last = [&]() {
+		setpoint.position[2] = _last_valid_offboard_setpoint.position[2];
+		setpoint.velocity[2] = _last_valid_offboard_setpoint.velocity[2];
+		setpoint.acceleration[2] = _last_valid_offboard_setpoint.acceleration[2];
+		setpoint.jerk[2] = _last_valid_offboard_setpoint.jerk[2];
+		rejected_z = true;
+	};
+
+	const auto reject_xy_to_state = [&]() {
+		setpoint.position[0] = states.position(0);
+		setpoint.position[1] = states.position(1);
+		setpoint.velocity[0] = NAN;
+		setpoint.velocity[1] = NAN;
+		setpoint.acceleration[0] = NAN;
+		setpoint.acceleration[1] = NAN;
+		setpoint.jerk[0] = NAN;
+		setpoint.jerk[1] = NAN;
+		rejected_xy = true;
+	};
+
+	const auto reject_z_to_state = [&]() {
+		setpoint.position[2] = states.position(2);
+		setpoint.velocity[2] = NAN;
+		setpoint.acceleration[2] = NAN;
+		setpoint.jerk[2] = NAN;
+		rejected_z = true;
+	};
+
+	if (_param_mpc_offb_jump_xy.get() > FLT_EPSILON
+	    && PX4_ISFINITE(setpoint.position[0]) && PX4_ISFINITE(setpoint.position[1])) {
+		if (_offboard_setpoint_initialized
+		    && PX4_ISFINITE(_last_valid_offboard_setpoint.position[0]) && PX4_ISFINITE(_last_valid_offboard_setpoint.position[1])) {
+			const float dx = setpoint.position[0] - _last_valid_offboard_setpoint.position[0];
+			const float dy = setpoint.position[1] - _last_valid_offboard_setpoint.position[1];
+			xy_jump = sqrtf(dx * dx + dy * dy);
+
+			if (xy_jump > _param_mpc_offb_jump_xy.get()) {
+				reject_xy_to_last();
+			}
+
+		} else if (PX4_ISFINITE(states.position(0)) && PX4_ISFINITE(states.position(1))) {
+			const float dx = setpoint.position[0] - states.position(0);
+			const float dy = setpoint.position[1] - states.position(1);
+			xy_jump = sqrtf(dx * dx + dy * dy);
+
+			if (xy_jump > _param_mpc_offb_jump_xy.get()) {
+				reject_xy_to_state();
+			}
+		}
+	}
+
+	if (_param_mpc_offb_jump_z.get() > FLT_EPSILON && PX4_ISFINITE(setpoint.position[2])) {
+		if (_offboard_setpoint_initialized && PX4_ISFINITE(_last_valid_offboard_setpoint.position[2])) {
+			z_jump = fabsf(setpoint.position[2] - _last_valid_offboard_setpoint.position[2]);
+
+			if (z_jump > _param_mpc_offb_jump_z.get()) {
+				reject_z_to_last();
+			}
+
+		} else if (PX4_ISFINITE(states.position(2))) {
+			z_jump = fabsf(setpoint.position[2] - states.position(2));
+
+			if (z_jump > _param_mpc_offb_jump_z.get()) {
+				reject_z_to_state();
+			}
+		}
+	}
+
+	if ((rejected_xy || rejected_z) && ((now - _last_warn) > 2_s)) {
+		PX4_WARN("offboard setpoint jump rejected (xy=%.2fm z=%.2fm)",
+			 static_cast<double>(PX4_ISFINITE(xy_jump) ? xy_jump : 0.f),
+			 static_cast<double>(PX4_ISFINITE(z_jump) ? z_jump : 0.f));
+		_last_warn = now;
+	}
+
+	_last_valid_offboard_setpoint = setpoint;
+	_offboard_setpoint_initialized = true;
+}
+
 trajectory_setpoint_s MulticopterPositionControl::generateFailsafeSetpoint(const hrt_abstime &now,
 		const PositionControlStates &states, bool warn)
 {
@@ -613,7 +727,12 @@ trajectory_setpoint_s MulticopterPositionControl::generateFailsafeSetpoint(const
 void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_position_s &vehicle_local_position,
 		trajectory_setpoint_s &setpoint)
 {
-	if ((setpoint.timestamp != 0) && (setpoint.timestamp < vehicle_local_position.timestamp)) {
+	const bool setpoint_valid = (setpoint.timestamp != 0) && (setpoint.timestamp < vehicle_local_position.timestamp);
+	const bool last_offboard_setpoint_valid = _offboard_setpoint_initialized
+			&& (_last_valid_offboard_setpoint.timestamp != 0)
+			&& (_last_valid_offboard_setpoint.timestamp < vehicle_local_position.timestamp);
+
+	if (setpoint_valid) {
 		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
 			setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
 			setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
@@ -634,6 +753,30 @@ void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_
 
 		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
 			setpoint.yaw = wrap_pi(setpoint.yaw + vehicle_local_position.delta_heading);
+		}
+	}
+
+	if (last_offboard_setpoint_valid) {
+		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
+			_last_valid_offboard_setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
+			_last_valid_offboard_setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
+		}
+
+		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
+			_last_valid_offboard_setpoint.velocity[2] += vehicle_local_position.delta_vz;
+		}
+
+		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
+			_last_valid_offboard_setpoint.position[0] += vehicle_local_position.delta_xy[0];
+			_last_valid_offboard_setpoint.position[1] += vehicle_local_position.delta_xy[1];
+		}
+
+		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
+			_last_valid_offboard_setpoint.position[2] += vehicle_local_position.delta_z;
+		}
+
+		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
+			_last_valid_offboard_setpoint.yaw = wrap_pi(_last_valid_offboard_setpoint.yaw + vehicle_local_position.delta_heading);
 		}
 	}
 
