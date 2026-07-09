@@ -146,9 +146,6 @@ enum ACCEL_CONFIG_BIT : uint8_t {
 // ACCEL_CONFIG2
 enum ACCEL_CONFIG2_BIT : uint8_t {
 	ACCEL_FCHOICE_B_BYPASS_DLPF = Bit3,
-
-	// [2:0] A_DLPFCFG
-	A_DLPFCFG_BW_44HZ_DLPF = Bit1 | Bit0, // Rate 1 kHz, 44.8 Hz bandwidth (DLPF enabled)
 };
 
 // FIFO_EN
