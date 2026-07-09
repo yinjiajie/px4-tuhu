@@ -117,3 +117,19 @@ PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_XY, 3.0f);
  * @group Multicopter Position Control
  */
 PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_Z, 1.5f);
+
+/**
+ * Offboard yaw setpoint jump rejection threshold
+ *
+ * Reject offboard yaw setpoints whose angular jump from the last accepted
+ * setpoint exceeds this threshold. The rejected sample is replaced by the last
+ * accepted offboard yaw setpoint. Set to 0 to disable.
+ *
+ * @unit deg
+ * @min 0
+ * @max 180
+ * @decimal 1
+ * @increment 0.1
+ * @group Multicopter Position Control
+ */
+PARAM_DEFINE_FLOAT(MPC_OFFB_YAW_JMP, 20.0f);
