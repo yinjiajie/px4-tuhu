@@ -380,10 +380,7 @@ else
 			esc_battery start
 		fi
 
-		if ! param compare BAT1_SOURCE 1
-		then
-			battery_status start
-		fi
+		battery_status start
 
 		sensors start
 		commander start
