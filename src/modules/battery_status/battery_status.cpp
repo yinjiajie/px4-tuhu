@@ -126,7 +126,9 @@ private:
 	}; // End _analogBatteries
 
 	perf_counter_t	_loop_perf;			/**< loop performance counter */
+	hrt_abstime _startup_time{0};
 	hrt_abstime _last_external_battery_status{0};
+	uint8_t _last_external_battery_id{1};
 	bool _external_battery_fallback_active{false};
 
 	/**
@@ -150,7 +152,8 @@ BatteryStatus::BatteryStatus() :
 #if BOARD_NUMBER_BRICKS > 1
 	_battery2(2, this, SAMPLE_INTERVAL_US, battery_status_s::BATTERY_SOURCE_POWER_MODULE, 1),
 #endif
-	_loop_perf(perf_alloc(PC_ELAPSED, MODULE_NAME))
+	_loop_perf(perf_alloc(PC_ELAPSED, MODULE_NAME)),
+	_startup_time(hrt_absolute_time())
 {
 	updateParams();
 }
@@ -262,6 +265,7 @@ BatteryStatus::battery_status_poll()
 		if (_battery_status_sub.copy(&battery_status)
 		    && battery_status.source == battery_status_s::BATTERY_SOURCE_EXTERNAL) {
 			_last_external_battery_status = battery_status.timestamp;
+			_last_external_battery_id = (battery_status.id > 0) ? battery_status.id : 1;
 
 			if (_external_battery_fallback_active) {
 				PX4_WARN("external battery restored, switching back from ADC");
@@ -282,6 +286,11 @@ BatteryStatus::publish_battery_fallback_if_needed(const battery_status_s &batter
 		return;
 	}
 
+	if ((_last_external_battery_status == 0)
+	    && (hrt_elapsed_time(&_startup_time) <= EXTERNAL_BATTERY_TIMEOUT)) {
+		return;
+	}
+
 	const bool external_battery_stale = (_last_external_battery_status == 0)
 					    || (hrt_elapsed_time(&_last_external_battery_status) > EXTERNAL_BATTERY_TIMEOUT);
 
@@ -294,7 +303,9 @@ BatteryStatus::publish_battery_fallback_if_needed(const battery_status_s &batter
 		_external_battery_fallback_active = true;
 	}
 
-	_battery_fallback_pub.publish(battery_status);
+	battery_status_s fallback_status = battery_status;
+	fallback_status.id = _last_external_battery_id;
+	_battery_fallback_pub.publish(fallback_status);
 }
 
 void

@@ -1804,6 +1804,9 @@ MavlinkReceiver::handle_message_battery_status(mavlink_message_t *msg)
 				   NAN;
 	battery_status.discharged_mah = (float)battery_mavlink.current_consumed;
 	battery_status.cell_count = cell_count;
+	// External BMS data is merged into BAT1 so QGC keeps a single battery entry
+	// while the source switches between BMS and ADC fallback.
+	battery_status.id = 1;
 	battery_status.capacity = (_param_bat1_capacity > 0.f) ?
 				  static_cast<uint16_t>(math::min(_param_bat1_capacity, (float)UINT16_MAX)) :
 				  0;
