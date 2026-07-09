@@ -100,7 +100,7 @@ PARAM_DEFINE_FLOAT(MPC_VELD_LP, 5.0f);
  * @increment 0.1
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_XY, 0.0f);
+PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_XY, 3.0f);
 
 /**
  * Offboard Z setpoint jump rejection threshold
@@ -116,4 +116,4 @@ PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_XY, 0.0f);
  * @increment 0.1
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_Z, 0.0f);
+PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_Z, 1.5f);
