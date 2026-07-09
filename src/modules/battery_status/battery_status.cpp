@@ -57,6 +57,7 @@
 #include <lib/battery/battery.h>
 #include <lib/conversion/rotation.h>
 #include <uORB/SubscriptionInterval.hpp>
+#include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionCallback.hpp>
 #include <uORB/Publication.hpp>
 #include <uORB/topics/parameter_update.h>
@@ -99,11 +100,17 @@ public:
 private:
 	void Run() override;
 
+	void battery_status_poll();
+	void publish_battery_fallback_if_needed(const battery_status_s &battery_status);
+
 	uORB::SubscriptionInterval	_parameter_update_sub{ORB_ID(parameter_update), 1_s};				/**< notification of parameter updates */
 	uORB::SubscriptionCallbackWorkItem _adc_report_sub{this, ORB_ID(adc_report)};
+	uORB::Subscription _battery_status_sub{ORB_ID(battery_status)};
+	uORB::Publication<battery_status_s> _battery_fallback_pub{ORB_ID(battery_status)};
 
 	static constexpr uint32_t SAMPLE_FREQUENCY_HZ = 100;
 	static constexpr uint32_t SAMPLE_INTERVAL_US  = 1_s / SAMPLE_FREQUENCY_HZ;
+	static constexpr hrt_abstime EXTERNAL_BATTERY_TIMEOUT = 3_s;
 
 	AnalogBattery _battery1;
 
@@ -119,6 +126,8 @@ private:
 	}; // End _analogBatteries
 
 	perf_counter_t	_loop_perf;			/**< loop performance counter */
+	hrt_abstime _last_external_battery_status{0};
+	bool _external_battery_fallback_active{false};
 
 	/**
 	 * Check for changes in parameters.
@@ -184,6 +193,8 @@ BatteryStatus::adc_poll()
 	adc_report_s adc_report;
 
 	if (_adc_report_sub.update(&adc_report)) {
+		battery_status_s battery1_status{};
+		bool battery1_status_updated = false;
 
 		/* Read add channels we got */
 		for (unsigned i = 0; i < PX4_MAX_ADC_CHANNELS; ++i) {
@@ -228,9 +239,62 @@ BatteryStatus::adc_poll()
 					bat_voltage_adc_readings[b],
 					bat_current_adc_readings[b]
 				);
+
+				if (b == 0) {
+					battery1_status = _analogBatteries[b]->getBatteryStatus();
+					battery1_status_updated = true;
+				}
+			}
+		}
+
+		if (battery1_status_updated) {
+			publish_battery_fallback_if_needed(battery1_status);
+		}
+	}
+}
+
+void
+BatteryStatus::battery_status_poll()
+{
+	if (_battery_status_sub.updated()) {
+		battery_status_s battery_status{};
+
+		if (_battery_status_sub.copy(&battery_status)
+		    && battery_status.source == battery_status_s::BATTERY_SOURCE_EXTERNAL) {
+			_last_external_battery_status = battery_status.timestamp;
+
+			if (_external_battery_fallback_active) {
+				PX4_WARN("external battery restored, switching back from ADC");
+				_external_battery_fallback_active = false;
 			}
 		}
 	}
+}
+
+void
+BatteryStatus::publish_battery_fallback_if_needed(const battery_status_s &battery_status)
+{
+	// Check once more right before publishing fallback to avoid overwriting a just-restored external update.
+	battery_status_poll();
+
+	if (_battery1.selected_source() != battery_status_s::BATTERY_SOURCE_EXTERNAL) {
+		_external_battery_fallback_active = false;
+		return;
+	}
+
+	const bool external_battery_stale = (_last_external_battery_status == 0)
+					    || (hrt_elapsed_time(&_last_external_battery_status) > EXTERNAL_BATTERY_TIMEOUT);
+
+	if (!external_battery_stale) {
+		return;
+	}
+
+	if (!_external_battery_fallback_active) {
+		PX4_WARN("external battery timeout, switching to ADC");
+		_external_battery_fallback_active = true;
+	}
+
+	_battery_fallback_pub.publish(battery_status);
 }
 
 void
@@ -245,6 +309,9 @@ BatteryStatus::Run()
 
 	/* check parameters for updates */
 	parameter_update_poll();
+
+	/* watch for fresh external battery updates before deciding whether ADC fallback is needed */
+	battery_status_poll();
 
 	/* check battery voltage */
 	adc_poll();

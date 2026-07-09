@@ -76,6 +76,7 @@ public:
 	 * Get the battery cell count
 	 */
 	int cell_count() { return _params.n_cells; }
+	uint8_t selected_source() const { return static_cast<uint8_t>(_params.source); }
 
 	/**
 	 * Get the empty voltage per cell
