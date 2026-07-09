@@ -579,8 +579,10 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 
 	bool rejected_xy = false;
 	bool rejected_z = false;
+	bool rejected_yaw = false;
 	float xy_jump = NAN;
 	float z_jump = NAN;
+	float yaw_jump = NAN;
 
 	const auto reject_xy_to_last = [&]() {
 		setpoint.position[0] = _last_valid_offboard_setpoint.position[0];
@@ -602,6 +604,12 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 		rejected_z = true;
 	};
 
+	const auto reject_yaw_to_last = [&]() {
+		setpoint.yaw = _last_valid_offboard_setpoint.yaw;
+		setpoint.yawspeed = _last_valid_offboard_setpoint.yawspeed;
+		rejected_yaw = true;
+	};
+
 	const auto reject_xy_to_state = [&]() {
 		setpoint.position[0] = states.position(0);
 		setpoint.position[1] = states.position(1);
@@ -620,6 +628,12 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 		setpoint.acceleration[2] = NAN;
 		setpoint.jerk[2] = NAN;
 		rejected_z = true;
+	};
+
+	const auto reject_yaw_to_state = [&]() {
+		setpoint.yaw = states.yaw;
+		setpoint.yawspeed = NAN;
+		rejected_yaw = true;
 	};
 
 	if (_param_mpc_offb_jump_xy.get() > FLT_EPSILON
@@ -662,10 +676,30 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 		}
 	}
 
-	if ((rejected_xy || rejected_z) && ((now - _last_warn) > 2_s)) {
-		PX4_WARN("offboard setpoint jump rejected (xy=%.2fm z=%.2fm)",
+	if (_param_mpc_offb_jump_yaw.get() > FLT_EPSILON && PX4_ISFINITE(setpoint.yaw)) {
+		const float max_yaw_jump = math::radians(_param_mpc_offb_jump_yaw.get());
+
+		if (_offboard_setpoint_initialized && PX4_ISFINITE(_last_valid_offboard_setpoint.yaw)) {
+			yaw_jump = fabsf(wrap_pi(setpoint.yaw - _last_valid_offboard_setpoint.yaw));
+
+			if (yaw_jump > max_yaw_jump) {
+				reject_yaw_to_last();
+			}
+
+		} else if (PX4_ISFINITE(states.yaw)) {
+			yaw_jump = fabsf(wrap_pi(setpoint.yaw - states.yaw));
+
+			if (yaw_jump > max_yaw_jump) {
+				reject_yaw_to_state();
+			}
+		}
+	}
+
+	if ((rejected_xy || rejected_z || rejected_yaw) && ((now - _last_warn) > 2_s)) {
+		PX4_WARN("offboard setpoint jump rejected (xy=%.2fm z=%.2fm yaw=%.1fdeg)",
 			 static_cast<double>(PX4_ISFINITE(xy_jump) ? xy_jump : 0.f),
-			 static_cast<double>(PX4_ISFINITE(z_jump) ? z_jump : 0.f));
+			 static_cast<double>(PX4_ISFINITE(z_jump) ? z_jump : 0.f),
+			 static_cast<double>(PX4_ISFINITE(yaw_jump) ? math::degrees(yaw_jump) : 0.f));
 		_last_warn = now;
 	}
 

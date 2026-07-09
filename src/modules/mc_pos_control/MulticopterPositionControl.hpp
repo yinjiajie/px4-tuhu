@@ -184,6 +184,7 @@ private:
 			(ParamFloat<px4::params::MPC_XY_ERR_MAX>)    _param_mpc_xy_err_max,
 			(ParamFloat<px4::params::MPC_OFFB_JUMP_XY>)  _param_mpc_offb_jump_xy,
 			(ParamFloat<px4::params::MPC_OFFB_JUMP_Z>)   _param_mpc_offb_jump_z,
+			(ParamFloat<px4::params::MPC_OFFB_YAW_JMP>)  _param_mpc_offb_jump_yaw,
 			(ParamFloat<px4::params::MPC_YAWRAUTO_MAX>)  _param_mpc_yawrauto_max,
 			(ParamFloat<px4::params::MPC_YAWRAUTO_ACC>)  _param_mpc_yawrauto_acc
 		);
@@ -247,7 +248,7 @@ private:
 					trajectory_setpoint_s &setpoint);
 
 	/**
-	 * Reject large offboard position setpoint jumps and hold the last accepted setpoint.
+	 * Reject large offboard position or yaw setpoint jumps and hold the last accepted setpoint.
 	 */
 		void protectOffboardSetpoint(const hrt_abstime &now, const PositionControlStates &states, bool new_setpoint,
 					     trajectory_setpoint_s &setpoint);
