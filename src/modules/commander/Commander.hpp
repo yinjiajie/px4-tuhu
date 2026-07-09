@@ -77,6 +77,7 @@
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/power_button_state.h>
 #include <uORB/topics/rtl_time_estimate.h>
+#include <uORB/topics/sensor_optical_flow.h>
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/system_power.h>
 #include <uORB/topics/telemetry_status.h>
@@ -169,6 +170,7 @@ private:
 	bool parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const;
 	bool parachuteReleaseAllowedByHeight();
 	bool parachuteReleaseAllowedByTotalSpeed();
+	bool parachuteReleaseBlockedByOpticalFlowDistance();
 
 	void send_parachute_command(uint8_t parachute_action, bool play_release_tune);
 	void get_parachute_state(float &height_above_takeoff, float &vertical_velocity);
@@ -313,8 +315,8 @@ private:
 
 	uORB::SubscriptionInterval				_parameter_update_sub{ORB_ID(parameter_update), 1_s};
 
+	uORB::SubscriptionMultiArray<sensor_optical_flow_s>	_sensor_optical_flow_subs{ORB_ID::sensor_optical_flow};
 	uORB::SubscriptionMultiArray<telemetry_status_s>	_telemetry_status_subs{ORB_ID::telemetry_status};
-
 #if defined(BOARD_HAS_POWER_CONTROL)
 	uORB::Subscription					_power_button_state_sub {ORB_ID(power_button_state)};
 #endif // BOARD_HAS_POWER_CONTROL
