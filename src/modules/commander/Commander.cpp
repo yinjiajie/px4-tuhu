@@ -102,6 +102,7 @@ static_assert(sizeof(actuator_armed_s) == 16, "actuator_armed equality operator 
 
 static constexpr float PARACHUTE_MIN_RELEASE_HEIGHT_ABOVE_TAKEOFF_M = 15.f;
 static constexpr float PARACHUTE_MIN_RELEASE_TOTAL_SPEED_M_S = 0.5f;
+static constexpr uint64_t PARACHUTE_OPTICAL_FLOW_DISTANCE_TIMEOUT = 1_s;
 
 bool Commander::parachuteReleaseRequestedByAttitudeFailure(const hrt_abstime now) const
 {
@@ -139,6 +140,28 @@ bool Commander::parachuteReleaseAllowedByTotalSpeed()
 	    && PX4_ISFINITE(local_position.vx) && PX4_ISFINITE(local_position.vy) && PX4_ISFINITE(local_position.vz)) {
 		const float total_speed = sqrtf(sq(local_position.vx) + sq(local_position.vy) + sq(local_position.vz));
 		return total_speed > PARACHUTE_MIN_RELEASE_TOTAL_SPEED_M_S;
+	}
+
+	return false;
+}
+
+bool Commander::parachuteReleaseBlockedByOpticalFlowDistance()
+{
+	for (int instance = 0; instance < _sensor_optical_flow_subs.size(); instance++) {
+		if (!_sensor_optical_flow_subs[instance].advertised()) {
+			continue;
+		}
+
+		sensor_optical_flow_s sensor_optical_flow{};
+
+		// Some sensors report 0 m when they are out of range, so only strictly positive distances block release.
+		if (_sensor_optical_flow_subs[instance].copy(&sensor_optical_flow)
+		    && hrt_elapsed_time(&sensor_optical_flow.timestamp) < PARACHUTE_OPTICAL_FLOW_DISTANCE_TIMEOUT
+		    && sensor_optical_flow.distance_available
+		    && PX4_ISFINITE(sensor_optical_flow.distance_m)
+		    && (sensor_optical_flow.distance_m > 0.f)) {
+			return true;
+		}
 	}
 
 	return false;
@@ -1951,6 +1974,7 @@ void Commander::run()
 		// sufficiently above the takeoff point.
 		const bool parachute_release_requested = isArmed()
 							&& parachuteReleaseAllowedByHeight()
+							&& !parachuteReleaseBlockedByOpticalFlowDistance()
 							&& (_actuator_armed.force_failsafe || parachute_release_requested_by_lockdown);
 		const uint8_t parachute_action = parachute_release_requested ? vehicle_command_s::PARACHUTE_ACTION_RELEASE :
 						 vehicle_command_s::PARACHUTE_ACTION_ENABLE;
