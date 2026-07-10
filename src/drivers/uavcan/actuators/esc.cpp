@@ -149,6 +149,20 @@ UavcanEscController::get_status_index_for_node_id(uint8_t node_id, uint8_t esc_i
 	return esc_index_hint < esc_status_s::CONNECTED_ESC_MAX ? esc_index_hint : 0;
 }
 
+uint8_t
+UavcanEscController::get_connected_esc_count() const
+{
+	uint8_t esc_count = 0;
+
+	for (int index = 0; index < esc_status_s::CONNECTED_ESC_MAX; ++index) {
+		if (_status_slot_node_id[index] != INVALID_NODE_ID) {
+			esc_count = index + 1;
+		}
+	}
+
+	return esc_count;
+}
+
 void
 UavcanEscController::esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::Status> &msg)
 {
@@ -167,11 +181,12 @@ UavcanEscController::esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavca
 		ref.esc_rpm         = msg.rpm;
 		ref.esc_errorcount  = msg.error_count;
 
-		_esc_status.esc_count = _rotor_count;
+		const uint8_t esc_count = _rotor_count > 0 ? _rotor_count : get_connected_esc_count();
 		_esc_status.counter += 1;
+		_esc_status.esc_count = esc_count;
 		_esc_status.esc_connectiontype = esc_status_s::ESC_CONNECTION_TYPE_CAN;
 		_esc_status.esc_online_flags = check_escs_status();
-		_esc_status.esc_armed_flags = (1 << _rotor_count) - 1;
+		_esc_status.esc_armed_flags = esc_count > 0 ? ((1u << esc_count) - 1u) : 0;
 		_esc_status.timestamp = now;
 		_esc_status_pub.publish(_esc_status);
 	}

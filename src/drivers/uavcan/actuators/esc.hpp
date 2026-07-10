@@ -99,6 +99,11 @@ private:
 	 */
 	uint8_t check_escs_status();
 
+	/**
+	 * Returns the number of ESC slots that have been assigned to a UAVCAN node.
+	 */
+	uint8_t get_connected_esc_count() const;
+
 	typedef uavcan::MethodBinder<UavcanEscController *,
 		void (UavcanEscController::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::Status>&)> StatusCbBinder;
 
