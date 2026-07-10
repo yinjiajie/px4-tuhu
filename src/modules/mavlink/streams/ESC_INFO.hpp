@@ -34,6 +34,7 @@
 #ifndef ESC_INFO_HPP
 #define ESC_INFO_HPP
 
+#include <lib/mathlib/mathlib.h>
 #include <uORB/topics/esc_status.h>
 
 class MavlinkStreamESCInfo : public MavlinkStream
@@ -59,6 +60,25 @@ private:
 	uORB::Subscription _esc_status_sub{ORB_ID(esc_status)};
 	uint8_t _number_of_batches{0};
 
+	static uint8_t get_active_esc_count(const esc_status_s &esc_status)
+	{
+		if (esc_status.esc_count > 0) {
+			return math::min(esc_status.esc_count, esc_status_s::CONNECTED_ESC_MAX);
+		}
+
+		for (int i = esc_status_s::CONNECTED_ESC_MAX - 1; i >= 0; --i) {
+			const bool has_data = (esc_status.esc[i].timestamp != 0)
+				      || ((esc_status.esc_online_flags & (1u << i)) != 0)
+				      || ((esc_status.esc_armed_flags & (1u << i)) != 0);
+
+			if (has_data) {
+				return i + 1;
+			}
+		}
+
+		return 0;
+	}
+
 	bool send() override
 	{
 		static constexpr uint8_t batch_size = MAVLINK_MSG_ESC_INFO_FIELD_TEMPERATURE_LEN;
@@ -66,24 +86,34 @@ private:
 
 		if (_esc_status_sub.update(&esc_status)) {
 			mavlink_esc_info_t msg{};
+			const uint8_t esc_count = get_active_esc_count(esc_status);
 
 			msg.time_usec = esc_status.timestamp;
 			msg.counter = esc_status.counter;
-			msg.count = esc_status.esc_count;
+			msg.count = esc_count;
 			msg.connection_type = esc_status.esc_connectiontype;
 			msg.info = esc_status.esc_online_flags;
 
 			// Ceil value of integer division. For 1-4 esc => 1 batch, 5-8 esc => 2 batches etc
-			_number_of_batches = ceilf((float)esc_status.esc_count / batch_size);
+			_number_of_batches = (esc_count + batch_size - 1) / batch_size;
 
 			for (int batch_number = 0; batch_number < _number_of_batches; batch_number++) {
 				msg.index = batch_number * batch_size;
 
 				for (int esc_index = 0; esc_index < batch_size ; esc_index++) {
-					msg.failure_flags[esc_index] = esc_status.esc[esc_index].failures;
-					msg.error_count[esc_index] = esc_status.esc[esc_index].esc_errorcount;
-					msg.temperature[esc_index] = static_cast<int16_t>(esc_status.esc[esc_index].esc_temperature *
-								     100.f); // convert to centiDegrees
+					const int source_index = msg.index + esc_index;
+
+					if (source_index < esc_count) {
+						msg.failure_flags[esc_index] = esc_status.esc[source_index].failures;
+						msg.error_count[esc_index] = esc_status.esc[source_index].esc_errorcount;
+						msg.temperature[esc_index] = static_cast<int16_t>(esc_status.esc[source_index].esc_temperature *
+									     100.f); // convert to centiDegrees
+
+					} else {
+						msg.failure_flags[esc_index] = 0;
+						msg.error_count[esc_index] = 0;
+						msg.temperature[esc_index] = 0;
+					}
 				}
 
 				mavlink_msg_esc_info_send_struct(_mavlink->get_channel(), &msg);
