@@ -178,3 +178,5 @@ param set-default BAT_AVRG_CURRENT 21
 
 param set BAT1_V_DIV 16.4814
 param set BAT1_SOURCE 1
+
+param set-default COM_ACT_UNLOCK 1
