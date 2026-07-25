@@ -77,8 +77,8 @@ param set EKF2_GPS_POS_X 0       #
 param set EKF2_GPS_POS_Y 0.17      #
 param set EKF2_GPS_POS_Z -0.02
 
-param set-default EKF2_GPS_CTRL 7
-param set GPS_YAW_OFFSET 270
+param set-default EKF2_GPS_CTRL 15
+param set-default GPS_YAW_OFFSET 90
 
 param set COM_RCL_EXCEPT 7
 param set NAV_RCL_ACT 1
