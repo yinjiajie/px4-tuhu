@@ -73,8 +73,8 @@ private:
 			msg.lat = static_cast<int32_t>(round(gps.latitude_deg * 1e7));
 			msg.lon = static_cast<int32_t>(round(gps.longitude_deg * 1e7));
 			msg.alt = static_cast<int32_t>(round(gps.altitude_msl_m * 1e3)); // convert [m] to [mm]
-			msg.eph = gps.hdop * 100; // GPS HDOP horizontal dilution of position (unitless)
-			msg.epv = gps.vdop * 100; // GPS VDOP vertical dilution of position (unitless)
+			msg.eph = gps.eph * 100; // horizontal position accuracy in cm
+			msg.epv = gps.epv * 100; // vertical position accuracy in cm
 
 			if (PX4_ISFINITE(gps.vel_m_s) && (fabsf(gps.vel_m_s) >= 0.f)) {
 				msg.vel = gps.vel_m_s * 100.f; // cm/s
