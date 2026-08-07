@@ -119,6 +119,22 @@ PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_XY, 3.0f);
 PARAM_DEFINE_FLOAT(MPC_OFFB_JUMP_Z, 1.5f);
 
 /**
+ * Offboard position takeover feed-forward transition time
+ *
+ * When switching into position-controlled offboard without external velocity or
+ * acceleration feed-forward, preserve the previous-mode feed-forward and blend
+ * it to zero across this interval. Set to 0 to disable.
+ *
+ * @unit s
+ * @min 0
+ * @max 3
+ * @decimal 2
+ * @increment 0.05
+ * @group Multicopter Position Control
+ */
+PARAM_DEFINE_FLOAT(MPC_OFFB_TRANS_T, 0.5f);
+
+/**
  * Offboard yaw setpoint jump rejection threshold
  *
  * Reject offboard yaw setpoints whose angular jump from the last accepted

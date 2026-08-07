@@ -184,6 +184,7 @@ private:
 			(ParamFloat<px4::params::MPC_XY_ERR_MAX>)    _param_mpc_xy_err_max,
 			(ParamFloat<px4::params::MPC_OFFB_JUMP_XY>)  _param_mpc_offb_jump_xy,
 			(ParamFloat<px4::params::MPC_OFFB_JUMP_Z>)   _param_mpc_offb_jump_z,
+			(ParamFloat<px4::params::MPC_OFFB_TRANS_T>)  _param_mpc_offb_trans_t,
 			(ParamFloat<px4::params::MPC_OFFB_YAW_JMP>)  _param_mpc_offb_jump_yaw,
 			(ParamFloat<px4::params::MPC_YAWRAUTO_MAX>)  _param_mpc_yawrauto_max,
 			(ParamFloat<px4::params::MPC_YAWRAUTO_ACC>)  _param_mpc_yawrauto_acc
@@ -200,6 +201,8 @@ private:
 
 		bool _hover_thrust_initialized{false};
 		bool _offboard_setpoint_initialized{false};
+		hrt_abstime _time_offboard_enabled{0};
+		trajectory_setpoint_s _offboard_activation_reference_setpoint{PositionControl::empty_trajectory_setpoint};
 
 	/** Timeout in us for trajectory data to get considered invalid */
 	static constexpr uint64_t TRAJECTORY_STREAM_TIMEOUT_US = 500_ms;
@@ -252,4 +255,10 @@ private:
 	 */
 		void protectOffboardSetpoint(const hrt_abstime &now, const PositionControlStates &states, bool new_setpoint,
 					     trajectory_setpoint_s &setpoint);
+
+	/**
+	 * Briefly preserve the previous-mode feed-forward when entering position-only offboard.
+	 */
+	void applyOffboardTransitionFeedforward(const hrt_abstime &now, const PositionControlStates &states,
+						trajectory_setpoint_s &setpoint);
 };

@@ -367,9 +367,16 @@ void MulticopterPositionControl::Run()
 					_setpoint = PositionControl::empty_trajectory_setpoint;
 				}
 
+				if (!previous_offboard_enabled && _vehicle_control_mode.flag_control_offboard_enabled) {
+					_time_offboard_enabled = _vehicle_control_mode.timestamp;
+					_offboard_activation_reference_setpoint = _setpoint;
+				}
+
 				if (previous_offboard_enabled && !_vehicle_control_mode.flag_control_offboard_enabled) {
 					_last_valid_offboard_setpoint = PositionControl::empty_trajectory_setpoint;
+					_offboard_activation_reference_setpoint = PositionControl::empty_trajectory_setpoint;
 					_offboard_setpoint_initialized = false;
+					_time_offboard_enabled = 0;
 				}
 			}
 		}
@@ -573,10 +580,6 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 		return;
 	}
 
-	if (!new_setpoint) {
-		return;
-	}
-
 	bool rejected_xy = false;
 	bool rejected_z = false;
 	bool rejected_yaw = false;
@@ -636,61 +639,63 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 		rejected_yaw = true;
 	};
 
-	if (_param_mpc_offb_jump_xy.get() > FLT_EPSILON
-	    && PX4_ISFINITE(setpoint.position[0]) && PX4_ISFINITE(setpoint.position[1])) {
-		if (_offboard_setpoint_initialized
-		    && PX4_ISFINITE(_last_valid_offboard_setpoint.position[0]) && PX4_ISFINITE(_last_valid_offboard_setpoint.position[1])) {
-			const float dx = setpoint.position[0] - _last_valid_offboard_setpoint.position[0];
-			const float dy = setpoint.position[1] - _last_valid_offboard_setpoint.position[1];
-			xy_jump = sqrtf(dx * dx + dy * dy);
+	if (new_setpoint) {
+		if (_param_mpc_offb_jump_xy.get() > FLT_EPSILON
+		    && PX4_ISFINITE(setpoint.position[0]) && PX4_ISFINITE(setpoint.position[1])) {
+			if (_offboard_setpoint_initialized
+			    && PX4_ISFINITE(_last_valid_offboard_setpoint.position[0]) && PX4_ISFINITE(_last_valid_offboard_setpoint.position[1])) {
+				const float dx = setpoint.position[0] - _last_valid_offboard_setpoint.position[0];
+				const float dy = setpoint.position[1] - _last_valid_offboard_setpoint.position[1];
+				xy_jump = sqrtf(dx * dx + dy * dy);
 
-			if (xy_jump > _param_mpc_offb_jump_xy.get()) {
-				reject_xy_to_last();
-			}
+				if (xy_jump > _param_mpc_offb_jump_xy.get()) {
+					reject_xy_to_last();
+				}
 
-		} else if (PX4_ISFINITE(states.position(0)) && PX4_ISFINITE(states.position(1))) {
-			const float dx = setpoint.position[0] - states.position(0);
-			const float dy = setpoint.position[1] - states.position(1);
-			xy_jump = sqrtf(dx * dx + dy * dy);
+			} else if (PX4_ISFINITE(states.position(0)) && PX4_ISFINITE(states.position(1))) {
+				const float dx = setpoint.position[0] - states.position(0);
+				const float dy = setpoint.position[1] - states.position(1);
+				xy_jump = sqrtf(dx * dx + dy * dy);
 
-			if (xy_jump > _param_mpc_offb_jump_xy.get()) {
-				reject_xy_to_state();
-			}
-		}
-	}
-
-	if (_param_mpc_offb_jump_z.get() > FLT_EPSILON && PX4_ISFINITE(setpoint.position[2])) {
-		if (_offboard_setpoint_initialized && PX4_ISFINITE(_last_valid_offboard_setpoint.position[2])) {
-			z_jump = fabsf(setpoint.position[2] - _last_valid_offboard_setpoint.position[2]);
-
-			if (z_jump > _param_mpc_offb_jump_z.get()) {
-				reject_z_to_last();
-			}
-
-		} else if (PX4_ISFINITE(states.position(2))) {
-			z_jump = fabsf(setpoint.position[2] - states.position(2));
-
-			if (z_jump > _param_mpc_offb_jump_z.get()) {
-				reject_z_to_state();
+				if (xy_jump > _param_mpc_offb_jump_xy.get()) {
+					reject_xy_to_state();
+				}
 			}
 		}
-	}
 
-	if (_param_mpc_offb_jump_yaw.get() > FLT_EPSILON && PX4_ISFINITE(setpoint.yaw)) {
-		const float max_yaw_jump = math::radians(_param_mpc_offb_jump_yaw.get());
+		if (_param_mpc_offb_jump_z.get() > FLT_EPSILON && PX4_ISFINITE(setpoint.position[2])) {
+			if (_offboard_setpoint_initialized && PX4_ISFINITE(_last_valid_offboard_setpoint.position[2])) {
+				z_jump = fabsf(setpoint.position[2] - _last_valid_offboard_setpoint.position[2]);
 
-		if (_offboard_setpoint_initialized && PX4_ISFINITE(_last_valid_offboard_setpoint.yaw)) {
-			yaw_jump = fabsf(wrap_pi(setpoint.yaw - _last_valid_offboard_setpoint.yaw));
+				if (z_jump > _param_mpc_offb_jump_z.get()) {
+					reject_z_to_last();
+				}
 
-			if (yaw_jump > max_yaw_jump) {
-				reject_yaw_to_last();
+			} else if (PX4_ISFINITE(states.position(2))) {
+				z_jump = fabsf(setpoint.position[2] - states.position(2));
+
+				if (z_jump > _param_mpc_offb_jump_z.get()) {
+					reject_z_to_state();
+				}
 			}
+		}
 
-		} else if (PX4_ISFINITE(states.yaw)) {
-			yaw_jump = fabsf(wrap_pi(setpoint.yaw - states.yaw));
+		if (_param_mpc_offb_jump_yaw.get() > FLT_EPSILON && PX4_ISFINITE(setpoint.yaw)) {
+			const float max_yaw_jump = math::radians(_param_mpc_offb_jump_yaw.get());
 
-			if (yaw_jump > max_yaw_jump) {
-				reject_yaw_to_state();
+			if (_offboard_setpoint_initialized && PX4_ISFINITE(_last_valid_offboard_setpoint.yaw)) {
+				yaw_jump = fabsf(wrap_pi(setpoint.yaw - _last_valid_offboard_setpoint.yaw));
+
+				if (yaw_jump > max_yaw_jump) {
+					reject_yaw_to_last();
+				}
+
+			} else if (PX4_ISFINITE(states.yaw)) {
+				yaw_jump = fabsf(wrap_pi(setpoint.yaw - states.yaw));
+
+				if (yaw_jump > max_yaw_jump) {
+					reject_yaw_to_state();
+				}
 			}
 		}
 	}
@@ -703,8 +708,64 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 		_last_warn = now;
 	}
 
-	_last_valid_offboard_setpoint = setpoint;
-	_offboard_setpoint_initialized = true;
+	applyOffboardTransitionFeedforward(now, states, setpoint);
+
+	if (new_setpoint) {
+		_last_valid_offboard_setpoint = setpoint;
+		_offboard_setpoint_initialized = true;
+	}
+}
+
+void MulticopterPositionControl::applyOffboardTransitionFeedforward(const hrt_abstime &now,
+		const PositionControlStates &states, trajectory_setpoint_s &setpoint)
+{
+	const float transition_time_s = _param_mpc_offb_trans_t.get();
+
+	if ((transition_time_s <= FLT_EPSILON) || (_time_offboard_enabled == 0) || (now <= _time_offboard_enabled)) {
+		return;
+	}
+
+	const float remaining_scale = 1.f - math::constrain(
+					 static_cast<float>(now - _time_offboard_enabled) / (transition_time_s * 1e6f), 0.f, 1.f);
+
+	if (remaining_scale <= FLT_EPSILON) {
+		return;
+	}
+
+	const auto get_reference_velocity = [&](int axis) {
+		return PX4_ISFINITE(_offboard_activation_reference_setpoint.velocity[axis])
+		       ? _offboard_activation_reference_setpoint.velocity[axis]
+		       : states.velocity(axis);
+	};
+
+	const auto get_reference_acceleration = [&](int axis) {
+		return PX4_ISFINITE(_offboard_activation_reference_setpoint.acceleration[axis])
+		       ? _offboard_activation_reference_setpoint.acceleration[axis]
+		       : states.acceleration(axis);
+	};
+
+	for (int axis = 0; axis < 3; axis++) {
+		const bool position_controlled = PX4_ISFINITE(setpoint.position[axis]);
+		const bool velocity_missing = !PX4_ISFINITE(setpoint.velocity[axis]);
+
+		if (!position_controlled || !velocity_missing) {
+			continue;
+		}
+
+		const float reference_velocity = get_reference_velocity(axis);
+
+		if (PX4_ISFINITE(reference_velocity)) {
+			setpoint.velocity[axis] = reference_velocity * remaining_scale;
+		}
+
+		if (!PX4_ISFINITE(setpoint.acceleration[axis])) {
+			const float reference_acceleration = get_reference_acceleration(axis);
+
+			if (PX4_ISFINITE(reference_acceleration)) {
+				setpoint.acceleration[axis] = reference_acceleration * remaining_scale;
+			}
+		}
+	}
 }
 
 trajectory_setpoint_s MulticopterPositionControl::generateFailsafeSetpoint(const hrt_abstime &now,
@@ -811,6 +872,34 @@ void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_
 
 		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
 			_last_valid_offboard_setpoint.yaw = wrap_pi(_last_valid_offboard_setpoint.yaw + vehicle_local_position.delta_heading);
+		}
+	}
+
+	const bool offboard_activation_reference_valid = (_offboard_activation_reference_setpoint.timestamp != 0)
+			&& (_offboard_activation_reference_setpoint.timestamp < vehicle_local_position.timestamp);
+
+	if (offboard_activation_reference_valid) {
+		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
+			_offboard_activation_reference_setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
+			_offboard_activation_reference_setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
+		}
+
+		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
+			_offboard_activation_reference_setpoint.velocity[2] += vehicle_local_position.delta_vz;
+		}
+
+		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
+			_offboard_activation_reference_setpoint.position[0] += vehicle_local_position.delta_xy[0];
+			_offboard_activation_reference_setpoint.position[1] += vehicle_local_position.delta_xy[1];
+		}
+
+		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
+			_offboard_activation_reference_setpoint.position[2] += vehicle_local_position.delta_z;
+		}
+
+		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
+			_offboard_activation_reference_setpoint.yaw = wrap_pi(_offboard_activation_reference_setpoint.yaw
+					+ vehicle_local_position.delta_heading);
 		}
 	}
 
