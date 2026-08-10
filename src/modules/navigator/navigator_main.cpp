@@ -843,12 +843,19 @@ void Navigator::run()
 			//        this general reset here.
 
 			const bool current_mode_is_takeoff = _navigation_mode == &_takeoff;
+			const bool current_mode_is_mission = _navigation_mode == &_mission;
 			const bool new_mode_is_loiter = navigation_mode_new == &_loiter;
 			const bool valid_loiter_setpoint = (_pos_sp_triplet.current.valid
 							    && _pos_sp_triplet.current.type == position_setpoint_s::SETPOINT_TYPE_LOITER);
+			// Rotary-wing vehicles switching from mission to loiter should brake into a hover at the
+			// current position instead of continuing to an existing mission loiter setpoint.
+			const bool mission_to_loiter_hover = current_mode_is_mission && new_mode_is_loiter
+							     && (_vstatus.vehicle_type == vehicle_status_s::VEHICLE_TYPE_ROTARY_WING);
 
 			const bool did_not_switch_takeoff_to_loiter = !(current_mode_is_takeoff && new_mode_is_loiter);
-			const bool did_not_switch_to_loiter_with_valid_loiter_setpoint = !(new_mode_is_loiter && valid_loiter_setpoint);
+			const bool did_not_switch_to_loiter_with_valid_loiter_setpoint = !(new_mode_is_loiter
+					&& valid_loiter_setpoint
+					&& !mission_to_loiter_hover);
 
 			if (did_not_switch_takeoff_to_loiter && did_not_switch_to_loiter_with_valid_loiter_setpoint) {
 				reset_triplets();
