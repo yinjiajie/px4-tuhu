@@ -111,7 +111,9 @@ private:
 	hrt_abstime _time_position_control_enabled{0};
 
 	trajectory_setpoint_s _setpoint{PositionControl::empty_trajectory_setpoint};
+	trajectory_setpoint_s _last_raw_offboard_setpoint{PositionControl::empty_trajectory_setpoint};
 	trajectory_setpoint_s _last_valid_offboard_setpoint{PositionControl::empty_trajectory_setpoint};
+	vehicle_local_position_setpoint_s _last_local_pos_sp{};
 	vehicle_control_mode_s _vehicle_control_mode{};
 
 	vehicle_constraints_s _vehicle_constraints {
@@ -200,9 +202,10 @@ private:
 		hrt_abstime _last_warn{0}; /**< timer when the last warn message was sent out */
 
 		bool _hover_thrust_initialized{false};
+		bool _local_pos_sp_initialized{false};
 		bool _offboard_setpoint_initialized{false};
-		hrt_abstime _time_offboard_enabled{0};
-		trajectory_setpoint_s _offboard_activation_reference_setpoint{PositionControl::empty_trajectory_setpoint};
+		hrt_abstime _offboard_position_takeover_time[3] {};
+		trajectory_setpoint_s _offboard_transition_reference_setpoint{PositionControl::empty_trajectory_setpoint};
 
 	/** Timeout in us for trajectory data to get considered invalid */
 	static constexpr uint64_t TRAJECTORY_STREAM_TIMEOUT_US = 500_ms;
@@ -257,7 +260,13 @@ private:
 					     trajectory_setpoint_s &setpoint);
 
 	/**
-	 * Briefly preserve the previous-mode feed-forward when entering position-only offboard.
+	 * Track position-only offboard setpoint changes that would create a large internal velocity step.
+	 */
+	void updateOffboardTransitionState(const hrt_abstime &now, const PositionControlStates &states, bool new_setpoint,
+					   const trajectory_setpoint_s &setpoint);
+
+	/**
+	 * Briefly preserve the previous internal motion reference when position-only offboard takes over.
 	 */
 	void applyOffboardTransitionFeedforward(const hrt_abstime &now, const PositionControlStates &states,
 						trajectory_setpoint_s &setpoint);
