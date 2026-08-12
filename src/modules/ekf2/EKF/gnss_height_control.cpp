@@ -134,7 +134,20 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 
 		} else {
 			if (starting_conditions_passing) {
-				if (_params.height_sensor_ref == static_cast<int32_t>(HeightSensor::GNSS)) {
+				const bool smooth_start_with_existing_vertical_aiding =
+					(_params.height_sensor_ref == static_cast<int32_t>(HeightSensor::GNSS))
+					&& isOtherSourceOfVerticalPositionAidingThan(_control_status.flags.gps_hgt)
+					&& PX4_ISFINITE(_state.pos(2))
+					&& PX4_ISFINITE(measurement);
+
+				if (smooth_start_with_existing_vertical_aiding) {
+					ECL_INFO("starting %s height fusion, aligning reference", HGT_SRC_NAME);
+					_height_sensor_ref = HeightSensor::GNSS;
+					_gps_alt_ref = gps_sample.alt + _state.pos(2);
+					_gpos_origin_epv = gps_sample.vacc;
+					bias_est.reset();
+
+				} else if (_params.height_sensor_ref == static_cast<int32_t>(HeightSensor::GNSS)) {
 					ECL_INFO("starting %s height fusion, resetting height", HGT_SRC_NAME);
 					_height_sensor_ref = HeightSensor::GNSS;
 
