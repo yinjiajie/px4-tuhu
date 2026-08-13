@@ -36,6 +36,8 @@
 #include "../Common.hpp"
 
 #include <uORB/Subscription.hpp>
+#include <uORB/topics/estimator_selector_status.h>
+#include <uORB/topics/estimator_status_flags.h>
 #include <uORB/topics/offboard_control_mode.h>
 
 class OffboardChecks : public HealthAndArmingCheckBase
@@ -47,9 +49,16 @@ public:
 	void checkAndReport(const Context &context, Report &reporter) override;
 
 private:
+	static constexpr int32_t EKF2_HGT_REF_GNSS = 1;
+
 	uORB::Subscription _offboard_control_mode_sub{ORB_ID(offboard_control_mode)};
+	uORB::Subscription _estimator_selector_status_sub{ORB_ID(estimator_selector_status)};
+	uORB::Subscription _estimator_status_flags_sub{ORB_ID(estimator_status_flags)};
 
 	DEFINE_PARAMETERS_CUSTOM_PARENT(HealthAndArmingCheckBase,
-					(ParamFloat<px4::params::COM_OF_LOSS_T>) _param_com_of_loss_t
+					(ParamFloat<px4::params::COM_OF_LOSS_T>) _param_com_of_loss_t,
+					(ParamInt<px4::params::SENS_IMU_MODE>) _param_sens_imu_mode,
+					(ParamBool<px4::params::SYS_HAS_GPS>) _param_sys_has_gps,
+					(ParamInt<px4::params::EKF2_HGT_REF>) _param_ekf2_hgt_ref
 				       );
 };
