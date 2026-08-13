@@ -88,6 +88,10 @@ void OffboardChecks::checkAndReport(const Context &context, Report &reporter)
 			if (!gps_fused || !gps_hgt_fused) {
 				offboard_available = false;
 
+				/* EVENT
+				 * @description
+				 * GNSS horizontal and height fusion must be active before an offboard position takeoff can start.
+				 */
 				reporter.armingCheckFailure(
 					(NavModes)reporter.failsafeFlags().mode_req_offboard_signal,
 					health_component_t::local_position_estimate,
