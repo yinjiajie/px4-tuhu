@@ -42,6 +42,21 @@ void OffboardChecks::checkAndReport(const Context &context, Report &reporter)
 	offboard_control_mode_s offboard_control_mode;
 
 	if (_offboard_control_mode_sub.copy(&offboard_control_mode)) {
+		estimator_status_flags_s estimator_status_flags{};
+		bool estimator_status_flags_valid = false;
+
+		if (_param_sens_imu_mode.get() == 0) { // multi-ekf
+			estimator_selector_status_s estimator_selector_status;
+
+			if (_estimator_selector_status_sub.copy(&estimator_selector_status)) {
+				if (_estimator_status_flags_sub.ChangeInstance(estimator_selector_status.primary_instance)) {
+					estimator_status_flags_valid = _estimator_status_flags_sub.copy(&estimator_status_flags);
+				}
+			}
+
+		} else {
+			estimator_status_flags_valid = _estimator_status_flags_sub.copy(&estimator_status_flags);
+		}
 
 		bool data_is_recent = hrt_absolute_time() < offboard_control_mode.timestamp
 				      + static_cast<hrt_abstime>(_param_com_of_loss_t.get() * 1_s);
@@ -59,6 +74,27 @@ void OffboardChecks::checkAndReport(const Context &context, Report &reporter)
 		} else if (offboard_control_mode.acceleration && reporter.failsafeFlags().local_velocity_invalid) {
 			// OFFBOARD acceleration handled by position controller
 			offboard_available = false;
+		}
+
+		const bool require_gps_fusion_for_offboard_takeoff = !context.isArmed()
+				&& offboard_control_mode.position
+				&& _param_sys_has_gps.get()
+				&& (_param_ekf2_hgt_ref.get() == EKF2_HGT_REF_GNSS);
+
+		if (require_gps_fusion_for_offboard_takeoff) {
+			const bool gps_fused = estimator_status_flags_valid && estimator_status_flags.cs_gps;
+			const bool gps_hgt_fused = estimator_status_flags_valid && estimator_status_flags.cs_gps_hgt;
+
+			if (!gps_fused || !gps_hgt_fused) {
+				offboard_available = false;
+
+				reporter.armingCheckFailure(
+					(NavModes)reporter.failsafeFlags().mode_req_offboard_signal,
+					health_component_t::local_position_estimate,
+					events::ID("check_offboard_gps_fusion_required"),
+					events::Log::Error,
+					"Offboard takeoff requires GNSS fusion");
+			}
 		}
 
 		// This is a mode requirement, no need to report
