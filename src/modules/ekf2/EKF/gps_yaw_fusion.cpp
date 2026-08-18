@@ -46,6 +46,68 @@
 #include <mathlib/mathlib.h>
 #include <cstdlib>
 
+namespace
+{
+
+constexpr float kGnssYawAccuracyGate = math::radians(5.f);
+constexpr float kGnssYawMagConsistencyGate = math::radians(20.f);
+
+} // namespace
+
+bool Ekf::isGpsYawMeasurementAccurate(const gnssSample &gps_sample) const
+{
+	return PX4_ISFINITE(gps_sample.yaw)
+	       && PX4_ISFINITE(gps_sample.yaw_acc)
+	       && (gps_sample.yaw_acc <= kGnssYawAccuracyGate);
+}
+
+bool Ekf::isGpsYawConsistentWithMag(const gnssSample &gps_sample)
+{
+	if (!PX4_ISFINITE(gps_sample.yaw)) {
+		return false;
+	}
+
+#if defined(CONFIG_EKF2_MAGNETOMETER)
+	float mag_heading;
+
+	if (getMagHeading(mag_heading)) {
+		const float yaw_delta = wrap_pi(wrap_pi(gps_sample.yaw) - mag_heading);
+		return fabsf(yaw_delta) <= kGnssYawMagConsistencyGate;
+	}
+#else
+	(void)gps_sample;
+#endif // CONFIG_EKF2_MAGNETOMETER
+
+	return true;
+}
+
+#if defined(CONFIG_EKF2_MAGNETOMETER)
+bool Ekf::getMagHeading(float &mag_heading)
+{
+	if ((_mag_counter <= 5) || !isNewestSampleRecent(_time_last_mag_buffer_push, MAG_MAX_INTERVAL)) {
+		return false;
+	}
+
+	Vector3f mag_bias{0.f, 0.f, 0.f};
+	const Vector3f mag_bias_var = getMagBiasVariance();
+
+	if ((mag_bias_var.min() > 0.f) && (mag_bias_var.max() <= sq(_params.mag_noise))) {
+		mag_bias = _state.mag_B;
+	}
+
+	const Dcmf R_to_earth_zero_yaw = updateYawInRotMat(0.f, _R_to_earth);
+	const Vector3f mag_earth_pred = R_to_earth_zero_yaw * (_mag_lpf.getState() - mag_bias);
+	const float horizontal_field_norm = Vector2f{mag_earth_pred(0), mag_earth_pred(1)}.norm();
+
+	if (horizontal_field_norm <= FLT_EPSILON) {
+		return false;
+	}
+
+	mag_heading = wrap_pi(-atan2f(mag_earth_pred(1), mag_earth_pred(0)) + getMagDeclination());
+	return PX4_ISFINITE(mag_heading);
+}
+#endif // CONFIG_EKF2_MAGNETOMETER
+
 void Ekf::updateGpsYaw(const gnssSample &gps_sample)
 {
 	if (PX4_ISFINITE(gps_sample.yaw)) {
@@ -58,7 +120,7 @@ void Ekf::updateGpsYaw(const gnssSample &gps_sample)
 		// calculate the observed yaw angle of antenna array, converting a from body to antenna yaw measurement
 		const float measured_hdg = wrap_pi(gps_sample.yaw + gps_sample.yaw_offset);
 
-		const float yaw_acc = PX4_ISFINITE(gps_sample.yaw_acc) ? gps_sample.yaw_acc : 0.f;
+		const float yaw_acc = PX4_ISFINITE(gps_sample.yaw_acc) ? gps_sample.yaw_acc : _params.gps_heading_noise;
 		const float R_YAW = sq(fmaxf(yaw_acc, _params.gps_heading_noise));
 
 		float heading_pred;
@@ -144,7 +206,7 @@ void Ekf::fuseGpsYaw(float antenna_yaw_offset)
 	}
 }
 
-bool Ekf::resetYawToGps(const float gnss_yaw, const float gnss_yaw_offset)
+bool Ekf::resetYawToGps(const float gnss_yaw, const float gnss_yaw_offset, const float gnss_yaw_acc)
 {
 	// define the predicted antenna array vector and rotate into earth frame
 	const Vector3f ant_vec_bf = {cosf(gnss_yaw_offset), sinf(gnss_yaw_offset), 0.0f};
@@ -158,7 +220,8 @@ bool Ekf::resetYawToGps(const float gnss_yaw, const float gnss_yaw_offset)
 	// GPS yaw measurement is alreday compensated for antenna offset in the driver
 	const float measured_yaw = gnss_yaw;
 
-	const float yaw_variance = sq(fmaxf(_params.gps_heading_noise, 1.e-2f));
+	const float yaw_acc = PX4_ISFINITE(gnss_yaw_acc) ? gnss_yaw_acc : _params.gps_heading_noise;
+	const float yaw_variance = sq(fmaxf(yaw_acc, _params.gps_heading_noise));
 	resetQuatStateYaw(measured_yaw, yaw_variance);
 
 	_aid_src_gnss_yaw.time_last_fuse = _time_delayed_us;

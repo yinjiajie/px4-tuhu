@@ -128,6 +128,49 @@ TEST_F(EkfGpsHeadingTest, fusionStartWithReset)
 	EXPECT_FALSE(_ekf_wrapper.isIntendingGpsHeadingFusion());
 }
 
+TEST_F(EkfGpsHeadingTest, fusionDoesNotStartWithLargeYawAccuracy)
+{
+	const float gps_heading = _ekf_wrapper.getYawAngle() + math::radians(10.f);
+	const int initial_quat_reset_counter = _ekf_wrapper.getQuaternionResetCounter();
+
+	_sensor_simulator._gps.setYaw(gps_heading);
+	_sensor_simulator._gps.setYawAccuracy(math::radians(6.f));
+	_sensor_simulator.runSeconds(0.4f);
+
+	EXPECT_FALSE(_ekf_wrapper.isIntendingGpsHeadingFusion());
+	EXPECT_EQ(_ekf_wrapper.getQuaternionResetCounter(), initial_quat_reset_counter);
+}
+
+TEST_F(EkfGpsHeadingTest, fusionDoesNotStartWhenGpsAndMagDifferTooMuch)
+{
+	const float gps_heading = _ekf_wrapper.getYawAngle() + math::radians(25.f);
+	const int initial_quat_reset_counter = _ekf_wrapper.getQuaternionResetCounter();
+
+	_sensor_simulator._gps.setYaw(gps_heading);
+	_sensor_simulator._gps.setYawAccuracy(math::radians(1.f));
+	_sensor_simulator.runSeconds(0.4f);
+
+	EXPECT_FALSE(_ekf_wrapper.isIntendingGpsHeadingFusion());
+	EXPECT_EQ(_ekf_wrapper.getQuaternionResetCounter(), initial_quat_reset_counter);
+}
+
+TEST_F(EkfGpsHeadingTest, fusionStartAcrossWrapAroundWhenDifferenceIsSmall)
+{
+	_sensor_simulator.simulateOrientation(Quatf(Eulerf(0.f, 0.f, math::radians(179.f))));
+	_sensor_simulator.runSeconds(0.5f);
+
+	const int initial_quat_reset_counter = _ekf_wrapper.getQuaternionResetCounter();
+	const float gps_heading = math::radians(-171.f);
+
+	_sensor_simulator._gps.setYaw(gps_heading);
+	_sensor_simulator._gps.setYawAccuracy(math::radians(1.f));
+	_sensor_simulator.runSeconds(0.4f);
+
+	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsHeadingFusion());
+	EXPECT_EQ(_ekf_wrapper.getQuaternionResetCounter(), initial_quat_reset_counter + 1);
+	EXPECT_LT(fabsf(matrix::wrap_pi(_ekf_wrapper.getYawAngle() - gps_heading)), math::radians(1.f));
+}
+
 TEST_F(EkfGpsHeadingTest, yawConvergence)
 {
 	// GIVEN: an initial GPS yaw, not aligned with the current one

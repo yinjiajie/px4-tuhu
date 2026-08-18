@@ -60,6 +60,7 @@ public:
 	void setLongitude(const double lon);
 	void setVelocity(const Vector3f &vel);
 	void setYaw(const float yaw);
+	void setYawAccuracy(const float yaw_accuracy);
 	void setYawOffset(const float yaw);
 	void setFixType(const int fix_type);
 	void setNumberOfSatellites(const int num_satellites);

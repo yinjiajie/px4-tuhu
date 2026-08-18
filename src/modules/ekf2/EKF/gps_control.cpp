@@ -341,11 +341,22 @@ void Ekf::controlGpsYawFusion(const gnssSample &gps_sample)
 		return;
 	}
 
-	updateGpsYaw(gps_sample);
-
 	const bool is_new_data_available = PX4_ISFINITE(gps_sample.yaw);
+	const bool is_gps_yaw_measurement_accurate = isGpsYawMeasurementAccurate(gps_sample);
+	const bool is_gps_yaw_consistent_with_mag = isGpsYawConsistentWithMag(gps_sample);
 
 	if (is_new_data_available) {
+		if (!is_gps_yaw_measurement_accurate) {
+			stopGpsYawFusion();
+			return;
+		}
+
+		if (_control_status.flags.gps_yaw && !is_gps_yaw_consistent_with_mag) {
+			stopGpsYawFusion();
+			return;
+		}
+
+		updateGpsYaw(gps_sample);
 
 		const bool continuing_conditions_passing = _control_status.flags.tilt_align;
 
@@ -355,7 +366,8 @@ void Ekf::controlGpsYawFusion(const gnssSample &gps_sample)
 		const bool starting_conditions_passing = continuing_conditions_passing
 				&& _gps_checks_passed
 				&& !is_gps_yaw_data_intermittent
-				&& !_gps_intermittent;
+				&& !_gps_intermittent
+				&& is_gps_yaw_consistent_with_mag;
 
 		if (_control_status.flags.gps_yaw) {
 
@@ -366,9 +378,9 @@ void Ekf::controlGpsYawFusion(const gnssSample &gps_sample)
 				const bool is_fusion_failing = isTimedOut(_aid_src_gnss_yaw.time_last_fuse, _params.reset_timeout_max);
 
 				if (is_fusion_failing) {
-					if (_nb_gps_yaw_reset_available > 0) {
+					if ((_nb_gps_yaw_reset_available > 0) && starting_conditions_passing) {
 						// Data seems good, attempt a reset
-						resetYawToGps(gps_sample.yaw, gps_sample.yaw_offset);
+						resetYawToGps(gps_sample.yaw, gps_sample.yaw_offset, gps_sample.yaw_acc);
 
 						if (_control_status.flags.in_air) {
 							_nb_gps_yaw_reset_available--;
@@ -397,7 +409,7 @@ void Ekf::controlGpsYawFusion(const gnssSample &gps_sample)
 		} else {
 			if (starting_conditions_passing) {
 				// Try to activate GPS yaw fusion
-				if (resetYawToGps(gps_sample.yaw, gps_sample.yaw_offset)) {
+				if (resetYawToGps(gps_sample.yaw, gps_sample.yaw_offset, gps_sample.yaw_acc)) {
 					ECL_INFO("starting GPS yaw fusion");
 
 					_aid_src_gnss_yaw.time_last_fuse = _time_delayed_us;
