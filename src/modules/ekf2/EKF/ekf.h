@@ -337,6 +337,15 @@ public:
 	float getMagBiasLimit() const { return 0.5f; } // 0.5 Gauss
 #endif // CONFIG_EKF2_MAGNETOMETER
 
+	bool isPreflightMagHeadingConsistent() const
+	{
+#if defined(CONFIG_EKF2_MAGNETOMETER)
+		return (_params.mag_fusion_type == MagFuseType::NONE) || _preflt_mag_heading_consistent;
+#else
+		return true;
+#endif // CONFIG_EKF2_MAGNETOMETER
+	}
+
 	bool accel_bias_inhibited() const { return _accel_bias_inhibit[0] || _accel_bias_inhibit[1] || _accel_bias_inhibit[2]; }
 	bool gyro_bias_inhibited() const { return _gyro_bias_inhibit[0] || _gyro_bias_inhibit[1] || _gyro_bias_inhibit[2]; }
 
@@ -705,6 +714,7 @@ private:
 	// used by magnetometer fusion mode selection
 	bool _yaw_angle_observable{false};	///< true when there is enough horizontal acceleration to make yaw observable
 	AlphaFilter<float> _mag_heading_innov_lpf{0.1f};
+	bool _preflt_mag_heading_consistent{false};	///< true when mag heading has stayed close enough to the fused yaw before takeoff
 	bool _mag_decl_cov_reset{false};	///< true after the fuseDeclination() function has been used to modify the earth field covariances after a magnetic field reset event.
 	uint8_t _nb_mag_3d_reset_available{0};
 	uint32_t _min_mag_health_time_us{1'000'000}; ///< magnetometer is marked as healthy only after this amount of time
@@ -716,6 +726,7 @@ private:
 
 	// Variables used to control activation of post takeoff functionality
 	uint64_t _flt_mag_align_start_time{0};	///< time that inflight magnetic field alignment started (uSec)
+	uint64_t _preflt_mag_heading_pass_start_time{0}; ///< time when the preflight mag heading agreement first stayed within gate
 	uint64_t _time_last_mag_check_failing{0};
 #endif // CONFIG_EKF2_MAGNETOMETER
 
@@ -1046,6 +1057,7 @@ private:
 
 	void checkYawAngleObservability();
 	void checkMagHeadingConsistency(const magSample &mag_sample);
+	void resetPreflightMagHeadingConsistency();
 
 	bool checkMagField(const Vector3f &mag);
 	static bool isMeasuredMatchingExpected(float measured, float expected, float gate);

@@ -172,6 +172,19 @@ void EstimatorChecks::checkEstimatorStatus(const Context &context, Report &repor
 		if (reporter.mavlink_log_pub()) {
 			mavlink_log_critical(reporter.mavlink_log_pub(), "Preflight Fail: height estimate not stable");
 		}
+
+	} else if (!context.isArmed() && estimator_status.pre_flt_fail_mag_heading_inconsistent) {
+		/* EVENT
+		 * @description
+		 * Magnetic heading and estimated heading must stay within 10 degrees before takeoff.
+		 */
+		reporter.armingCheckFailure(required_groups, health_component_t::local_position_estimate,
+					    events::ID("check_estimator_mag_heading_inconsistent"),
+					    events::Log::Error, "Compass heading inconsistent");
+
+		if (reporter.mavlink_log_pub()) {
+			mavlink_log_critical(reporter.mavlink_log_pub(), "Preflight Fail: compass heading inconsistent");
+		}
 	}
 
 
@@ -909,4 +922,3 @@ bool EstimatorChecks::checkPosVelValidity(const hrt_abstime &now, const bool dat
 
 	return valid;
 }
-

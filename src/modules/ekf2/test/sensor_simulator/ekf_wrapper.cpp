@@ -215,6 +215,11 @@ bool EkfWrapper::isMagHeadingConsistent() const
 	return _ekf->control_status_flags().mag_heading_consistent;
 }
 
+bool EkfWrapper::isPreflightMagHeadingConsistent() const
+{
+	return _ekf->isPreflightMagHeadingConsistent();
+}
+
 void EkfWrapper::setMagFuseTypeNone()
 {
 	_ekf_params->mag_fusion_type = MagFuseType::NONE;

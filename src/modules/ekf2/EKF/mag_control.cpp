@@ -39,6 +39,14 @@
 #include "ekf.h"
 #include <mathlib/mathlib.h>
 
+namespace
+{
+
+constexpr float kPreflightMagHeadingGate = math::radians(10.f);
+constexpr hrt_abstime kPreflightMagHeadingMinContinuousTime = 1'000'000;
+
+} // namespace
+
 void Ekf::controlMagFusion()
 {
 	// reset the flight alignment flag so that the mag fields will be
@@ -108,6 +116,7 @@ void Ekf::controlMagFusion()
 
 	} else if (!isNewestSampleRecent(_time_last_mag_buffer_push, 2 * MAG_MAX_INTERVAL)) {
 		// No data anymore. Stop until it comes back.
+		resetPreflightMagHeadingConsistency();
 		stopMagFusion();
 	}
 }
@@ -131,6 +140,8 @@ bool Ekf::checkHaglYawResetReq() const
 
 void Ekf::resetMagStates(const Vector3f &mag, bool reset_heading)
 {
+	resetPreflightMagHeadingConsistency();
+
 	// reinit mag states
 	const Vector3f mag_I_before_reset = _state.mag_I;
 	const Vector3f mag_B_before_reset = _state.mag_B;
@@ -253,15 +264,36 @@ void Ekf::checkMagHeadingConsistency(const magSample &mag_sample)
 	// the angle of the projection onto the horizontal gives the yaw angle
 	// calculate the yaw innovation and wrap to the interval between +-pi
 	const Vector3f mag_earth_pred = R_to_earth * (mag_sample.mag - mag_bias);
+	const float horizontal_field_norm = Vector2f{mag_earth_pred(0), mag_earth_pred(1)}.norm();
 	const float declination = getMagDeclination();
-	const float measured_hdg = -atan2f(mag_earth_pred(1), mag_earth_pred(0)) + declination;
+	const float measured_hdg = wrap_pi(-atan2f(mag_earth_pred(1), mag_earth_pred(0)) + declination);
 
-	if (_control_status.flags.yaw_align) {
+	if (_control_status.flags.yaw_align && (horizontal_field_norm > FLT_EPSILON)) {
 		const float innovation = wrap_pi(getEulerYaw(_R_to_earth) - measured_hdg);
 		_mag_heading_innov_lpf.update(innovation);
 
+		const bool preflight_heading_agreement_valid = !_control_status.flags.in_air
+				&& !mag_sample.reset
+				&& (_mag_counter > 5)
+				&& !_control_status.flags.mag_fault
+				&& !_control_status.flags.mag_field_disturbed
+				&& (fabsf(innovation) < kPreflightMagHeadingGate);
+
+		if (preflight_heading_agreement_valid) {
+			if (_preflt_mag_heading_pass_start_time == 0) {
+				_preflt_mag_heading_pass_start_time = _time_delayed_us;
+			}
+
+			_preflt_mag_heading_consistent = (_time_delayed_us - _preflt_mag_heading_pass_start_time)
+					>= kPreflightMagHeadingMinContinuousTime;
+
+		} else {
+			resetPreflightMagHeadingConsistency();
+		}
+
 	} else {
 		_mag_heading_innov_lpf.reset(0.f);
+		resetPreflightMagHeadingConsistency();
 	}
 
 	if (fabsf(_mag_heading_innov_lpf.getState()) < _params.mag_heading_noise) {
@@ -273,6 +305,12 @@ void Ekf::checkMagHeadingConsistency(const magSample &mag_sample)
 	} else {
 		_control_status.flags.mag_heading_consistent = false;
 	}
+}
+
+void Ekf::resetPreflightMagHeadingConsistency()
+{
+	_preflt_mag_heading_consistent = false;
+	_preflt_mag_heading_pass_start_time = 0;
 }
 
 bool Ekf::checkMagField(const Vector3f &mag_sample)
@@ -396,4 +434,3 @@ float Ekf::getMagDeclination()
 	// otherwise use the parameter value
 	return math::radians(_params.mag_declination_deg);
 }
-

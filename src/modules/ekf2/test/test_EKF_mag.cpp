@@ -148,6 +148,36 @@ TEST_F(EkfMagTest, suddenLargeStrength)
 	EXPECT_FALSE(_ekf_wrapper.isIntendingMag3DFusion());
 }
 
+TEST_F(EkfMagTest, preflightMagHeadingConsistencyRequiresContinuousAgreement)
+{
+	const Vector3f aligned_mag_data{0.218f, 0.f, 0.43f};
+	_sensor_simulator._mag.setData(aligned_mag_data);
+	_sensor_simulator.runSeconds(_init_duration_s);
+
+	EXPECT_TRUE(_ekf_wrapper.isPreflightMagHeadingConsistent());
+
+	const float heading_offset = math::radians(15.f);
+	const Vector3f inconsistent_mag_data{
+		0.218f * cosf(heading_offset),
+		-0.218f * sinf(heading_offset),
+		0.43f
+	};
+
+	_sensor_simulator._mag.setData(inconsistent_mag_data);
+	_sensor_simulator.runSeconds(0.5f);
+
+	EXPECT_FALSE(_ekf_wrapper.isPreflightMagHeadingConsistent());
+
+	_sensor_simulator._mag.setData(aligned_mag_data);
+	_sensor_simulator.runSeconds(0.6f);
+
+	EXPECT_FALSE(_ekf_wrapper.isPreflightMagHeadingConsistent());
+
+	_sensor_simulator.runSeconds(0.5f);
+
+	EXPECT_TRUE(_ekf_wrapper.isPreflightMagHeadingConsistent());
+}
+
 TEST_F(EkfMagTest, noInitLargeInclination)
 {
 	// GIVEN: a really large magnetic field

@@ -1828,6 +1828,7 @@ void EKF2::PublishStatus(const hrt_abstime &timestamp)
 	status.pre_flt_fail_innov_vel_vert = _preflt_checker.hasVertVelFailed();
 	status.pre_flt_fail_innov_height = _preflt_checker.hasHeightFailed();
 	status.pre_flt_fail_mag_field_disturbed = _ekf.control_status_flags().mag_field_disturbed;
+	status.pre_flt_fail_mag_heading_inconsistent = !_ekf.isPreflightMagHeadingConsistent();
 
 	status.accel_device_id = _device_id_accel;
 #if defined(CONFIG_EKF2_BAROMETER)
