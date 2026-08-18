@@ -106,8 +106,8 @@ TEST_F(EkfGpsHeadingTest, fusionStartWithReset)
 {
 	// GIVEN:EKF that fuses GPS
 
-	// WHEN: enabling GPS heading fusion and heading difference is bigger than 15 degrees
-	const float gps_heading = _ekf_wrapper.getYawAngle() + math::radians(20.f);
+	// WHEN: enabling GPS heading fusion and heading difference is below the start gate
+	const float gps_heading = _ekf_wrapper.getYawAngle() + math::radians(19.f);
 	_sensor_simulator._gps.setYaw(gps_heading);
 	_ekf_wrapper.enableGpsHeadingFusion();
 	const int initial_quat_reset_counter = _ekf_wrapper.getQuaternionResetCounter();
@@ -141,9 +141,9 @@ TEST_F(EkfGpsHeadingTest, fusionDoesNotStartWithLargeYawAccuracy)
 	EXPECT_EQ(_ekf_wrapper.getQuaternionResetCounter(), initial_quat_reset_counter);
 }
 
-TEST_F(EkfGpsHeadingTest, fusionDoesNotStartWhenGpsAndMagDifferTooMuch)
+TEST_F(EkfGpsHeadingTest, fusionDoesNotStartWhenGpsAndMagDifferMoreThan20Deg)
 {
-	const float gps_heading = _ekf_wrapper.getYawAngle() + math::radians(25.f);
+	const float gps_heading = _ekf_wrapper.getYawAngle() + math::radians(21.f);
 	const int initial_quat_reset_counter = _ekf_wrapper.getQuaternionResetCounter();
 
 	_sensor_simulator._gps.setYaw(gps_heading);
@@ -152,6 +152,29 @@ TEST_F(EkfGpsHeadingTest, fusionDoesNotStartWhenGpsAndMagDifferTooMuch)
 
 	EXPECT_FALSE(_ekf_wrapper.isIntendingGpsHeadingFusion());
 	EXPECT_EQ(_ekf_wrapper.getQuaternionResetCounter(), initial_quat_reset_counter);
+}
+
+TEST_F(EkfGpsHeadingTest, fusionStopsWhenGpsAndMagDifferMoreThan25DegAfterStart)
+{
+	float gps_heading = _ekf_wrapper.getYawAngle();
+
+	_sensor_simulator._gps.setYaw(gps_heading);
+	_sensor_simulator._gps.setYawAccuracy(math::radians(1.f));
+	_sensor_simulator.runSeconds(1.f);
+
+	ASSERT_TRUE(_ekf_wrapper.isIntendingGpsHeadingFusion());
+
+	gps_heading = matrix::wrap_pi(_ekf_wrapper.getYawAngle() + math::radians(24.f));
+	_sensor_simulator._gps.setYaw(gps_heading);
+	_sensor_simulator.runSeconds(0.4f);
+
+	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsHeadingFusion());
+
+	gps_heading = matrix::wrap_pi(_ekf_wrapper.getYawAngle() + math::radians(26.f));
+	_sensor_simulator._gps.setYaw(gps_heading);
+	_sensor_simulator.runSeconds(0.4f);
+
+	EXPECT_FALSE(_ekf_wrapper.isIntendingGpsHeadingFusion());
 }
 
 TEST_F(EkfGpsHeadingTest, fusionStartAcrossWrapAroundWhenDifferenceIsSmall)

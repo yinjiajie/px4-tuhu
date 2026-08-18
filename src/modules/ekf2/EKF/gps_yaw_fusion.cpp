@@ -50,7 +50,8 @@ namespace
 {
 
 constexpr float kGnssYawAccuracyGate = math::radians(5.f);
-constexpr float kGnssYawMagConsistencyGate = math::radians(20.f);
+constexpr float kGnssYawMagConsistencyStartGate = math::radians(20.f);
+constexpr float kGnssYawMagConsistencyContinueGate = math::radians(25.f);
 
 } // namespace
 
@@ -72,7 +73,14 @@ bool Ekf::isGpsYawConsistentWithMag(const gnssSample &gps_sample)
 
 	if (getMagHeading(mag_heading)) {
 		const float yaw_delta = wrap_pi(wrap_pi(gps_sample.yaw) - mag_heading);
-		return fabsf(yaw_delta) <= kGnssYawMagConsistencyGate;
+
+		// Apply hysteresis so fusion only starts when GNSS yaw is close to mag,
+		// but won't chatter on/off once active.
+		if (_control_status.flags.gps_yaw) {
+			return fabsf(yaw_delta) <= kGnssYawMagConsistencyContinueGate;
+		}
+
+		return fabsf(yaw_delta) < kGnssYawMagConsistencyStartGate;
 	}
 #else
 	(void)gps_sample;
