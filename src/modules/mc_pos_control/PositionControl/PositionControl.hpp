@@ -164,6 +164,11 @@ public:
 	void resetIntegral() { _vel_int.setZero(); }
 
 	/**
+	 * Reset the vertical velocity slew limiter state.
+	 */
+	void resetVerticalVelocitySlew() { _reset_vel_sp_z_slew = true; }
+
+	/**
 	 * If set, the tilt setpoint is computed by assuming no vertical acceleration
 	 */
 	void decoupleHorizontalAndVecticalAcceleration(bool val) { _decouple_horizontal_and_vertical_acceleration = val; }
@@ -197,8 +202,13 @@ private:
 	bool _inputValid();
 
 	void _positionControl(); ///< Position proportional control
+	void _slewLimitVerticalVelocity(const float dt); ///< Vertical velocity asymmetric slew rate limiting
 	void _velocityControl(const float dt); ///< Velocity PID control
 	void _accelerationControl(); ///< Acceleration setpoint processing
+
+	static constexpr float kVerticalVelocitySlewRateUp = 2.0f; ///< [m/s^2] maximum increase in upward speed (negative vz)
+	static constexpr float kVerticalVelocitySlewRateDown = 1.2f; ///< [m/s^2] maximum increase in downward speed (positive vz)
+	static constexpr float kVerticalVelocitySlewResetInterval = 0.5f; ///< [s] reset slew state after controller pauses
 
 	// Gains
 	matrix::Vector3f _gain_pos_p; ///< Position control proportional gain
@@ -232,4 +242,6 @@ private:
 	matrix::Vector3f _thr_sp; /**< desired thrust */
 	float _yaw_sp{}; /**< desired heading */
 	float _yawspeed_sp{}; /** desired yaw-speed */
+	float _vel_sp_z_slew_limited{}; /**< slew-rate limited vertical velocity setpoint */
+	bool _reset_vel_sp_z_slew{true};
 };

@@ -159,6 +159,44 @@ TEST_F(PositionControlBasicTest, VelocityLimit)
 	EXPECT_LE(abs(_output_setpoint.vz), 1.f);
 }
 
+TEST_F(PositionControlBasicTest, VerticalVelocitySlewLimitUp)
+{
+	_position_control.setVelocityLimits(1.f, 10.f, 10.f);
+	_input_setpoint.acceleration[0] = 0.f;
+	_input_setpoint.acceleration[1] = 0.f;
+	_input_setpoint.velocity[2] = 0.f;
+
+	EXPECT_TRUE(runController());
+	EXPECT_FLOAT_EQ(_output_setpoint.vz, 0.f);
+
+	_input_setpoint.velocity[2] = -10.f;
+
+	EXPECT_TRUE(runController());
+	EXPECT_NEAR(_output_setpoint.vz, -0.2f, 1e-6f);
+
+	EXPECT_TRUE(runController());
+	EXPECT_NEAR(_output_setpoint.vz, -0.4f, 1e-6f);
+}
+
+TEST_F(PositionControlBasicTest, VerticalVelocitySlewLimitDown)
+{
+	_position_control.setVelocityLimits(1.f, 10.f, 10.f);
+	_input_setpoint.acceleration[0] = 0.f;
+	_input_setpoint.acceleration[1] = 0.f;
+	_input_setpoint.velocity[2] = 0.f;
+
+	EXPECT_TRUE(runController());
+	EXPECT_FLOAT_EQ(_output_setpoint.vz, 0.f);
+
+	_input_setpoint.velocity[2] = 10.f;
+
+	EXPECT_TRUE(runController());
+	EXPECT_NEAR(_output_setpoint.vz, 0.12f, 1e-6f);
+
+	EXPECT_TRUE(runController());
+	EXPECT_NEAR(_output_setpoint.vz, 0.24f, 1e-6f);
+}
+
 TEST_F(PositionControlBasicTest, PositionControlMaxThrustLimit)
 {
 	// Given a setpoint that drives the controller into vertical and horizontal saturation

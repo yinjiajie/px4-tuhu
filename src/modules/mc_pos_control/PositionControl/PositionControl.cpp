@@ -111,10 +111,14 @@ bool PositionControl::update(const float dt)
 
 	if (valid) {
 		_positionControl();
+		_slewLimitVerticalVelocity(dt);
 		_velocityControl(dt);
 
 		_yawspeed_sp = PX4_ISFINITE(_yawspeed_sp) ? _yawspeed_sp : 0.f;
 		_yaw_sp = PX4_ISFINITE(_yaw_sp) ? _yaw_sp : _yaw; // TODO: better way to disable yaw control
+
+	} else {
+		resetVerticalVelocitySlew();
 	}
 
 	// There has to be a valid output acceleration and thrust setpoint otherwise something went wrong
@@ -135,6 +139,26 @@ void PositionControl::_positionControl()
 	_vel_sp.xy() = ControlMath::constrainXY(vel_sp_position.xy(), (_vel_sp - vel_sp_position).xy(), _lim_vel_horizontal);
 	// Constrain velocity in z-direction.
 	_vel_sp(2) = math::constrain(_vel_sp(2), -_lim_vel_up, _lim_vel_down);
+}
+
+void PositionControl::_slewLimitVerticalVelocity(const float dt)
+{
+	if (!PX4_ISFINITE(_vel_sp(2))) {
+		resetVerticalVelocitySlew();
+		return;
+	}
+
+	if (_reset_vel_sp_z_slew || (dt > kVerticalVelocitySlewResetInterval)) {
+		_vel_sp_z_slew_limited = _vel_sp(2);
+		_reset_vel_sp_z_slew = false;
+
+	} else {
+		const float delta_vz_max_up = kVerticalVelocitySlewRateUp * dt;
+		const float delta_vz_max_down = kVerticalVelocitySlewRateDown * dt;
+		const float delta_vz = math::constrain(_vel_sp(2) - _vel_sp_z_slew_limited, -delta_vz_max_up, delta_vz_max_down);
+		_vel_sp_z_slew_limited += delta_vz;
+		_vel_sp(2) = _vel_sp_z_slew_limited;
+	}
 }
 
 void PositionControl::_velocityControl(const float dt)
