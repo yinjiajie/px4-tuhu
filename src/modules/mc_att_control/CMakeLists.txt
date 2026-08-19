@@ -46,3 +46,5 @@ px4_add_module(
 		mathlib
 		px4_work_queue
 	)
+
+px4_add_unit_gtest(SRC RateSetpointSlewLimiterTest.cpp LINKLIBS modules__mc_att_control)

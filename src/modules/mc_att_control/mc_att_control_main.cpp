@@ -53,6 +53,11 @@
 
 using namespace matrix;
 
+namespace
+{
+constexpr float kRateSetpointSlewResetInterval = 0.1f;
+}
+
 MulticopterAttitudeControl::MulticopterAttitudeControl(bool vtol) :
 	ModuleParams(nullptr),
 	WorkItem(MODULE_NAME, px4::wq_configurations::nav_and_controllers),
@@ -94,6 +99,7 @@ MulticopterAttitudeControl::parameters_updated()
 	using math::radians;
 	_attitude_control.setRateLimit(Vector3f(radians(_param_mc_rollrate_max.get()), radians(_param_mc_pitchrate_max.get()),
 						radians(_param_mc_yawrate_max.get())));
+	_rate_setpoint_slew_limiter.setSlewRate(Vector3f(radians(600.f), radians(600.f), radians(400.f)));
 
 	_man_tilt_max = math::radians(_param_mpc_man_tilt_max.get());
 }
@@ -220,8 +226,11 @@ MulticopterAttitudeControl::Run()
 
 	if (_vehicle_attitude_sub.update(&v_att)) {
 
+		const float dt_raw = (v_att.timestamp_sample - _last_run) * 1e-6f;
+		const bool reset_rate_setpoint_slew = _reset_rates_sp_slew || (_last_run == 0) || (dt_raw > kRateSetpointSlewResetInterval);
+
 		// Guard against too small (< 0.2ms) and too large (> 20ms) dt's.
-		const float dt = math::constrain(((v_att.timestamp_sample - _last_run) * 1e-6f), 0.0002f, 0.02f);
+		const float dt = math::constrain(dt_raw, 0.0002f, 0.02f);
 		_last_run = v_att.timestamp_sample;
 
 		const Quatf q{v_att.q};
@@ -329,6 +338,13 @@ MulticopterAttitudeControl::Run()
 				}
 			}
 
+			if (reset_rate_setpoint_slew) {
+				_rate_setpoint_slew_limiter.reset(rates_sp);
+			}
+
+			rates_sp = _rate_setpoint_slew_limiter.update(rates_sp, dt);
+			_reset_rates_sp_slew = false;
+
 			// publish rate setpoint
 			vehicle_rates_setpoint_s rates_setpoint{};
 			rates_setpoint.roll = rates_sp(0);
@@ -338,6 +354,9 @@ MulticopterAttitudeControl::Run()
 			rates_setpoint.timestamp = hrt_absolute_time();
 
 			_vehicle_rates_setpoint_pub.publish(rates_setpoint);
+
+		} else {
+			_reset_rates_sp_slew = true;
 		}
 
 		if (_landed) {

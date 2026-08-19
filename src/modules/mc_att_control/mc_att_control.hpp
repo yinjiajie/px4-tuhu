@@ -57,6 +57,8 @@
 #include <lib/mathlib/math/filter/AlphaFilter.hpp>
 #include <lib/slew_rate/SlewRate.hpp>
 
+#include "RateSetpointSlewLimiter.hpp"
+
 #include <AttitudeControl.hpp>
 
 using namespace time_literals;
@@ -125,6 +127,7 @@ private:
 	SlewRate<float> _manual_throttle_maximum{0.f}; ///< 0 when disarmed ramped to 1 when spooled up
 	AlphaFilter<float> _man_roll_input_filter;
 	AlphaFilter<float> _man_pitch_input_filter;
+	RateSetpointSlewLimiter _rate_setpoint_slew_limiter;
 
 	hrt_abstime _last_run{0};
 	hrt_abstime _last_attitude_setpoint{0};
@@ -137,6 +140,7 @@ private:
 	bool _vtol{false};
 	bool _vtol_tailsitter{false};
 	bool _vtol_in_transition_mode{false};
+	bool _reset_rates_sp_slew{true};
 
 	uint8_t _quat_reset_counter{0};
 
@@ -164,4 +168,3 @@ private:
 		(ParamFloat<px4::params::COM_SPOOLUP_TIME>) _param_com_spoolup_time
 	)
 };
-
