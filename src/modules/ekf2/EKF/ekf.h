@@ -995,6 +995,7 @@ private:
 	void controlGnssYawEstimator(estimator_aid_source3d_s &aid_src_vel);
 	bool tryYawEmergencyReset();
 	void resetVelocityToGnss(estimator_aid_source3d_s &aid_src);
+	void resetHorizontalVelocityToGnss(estimator_aid_source3d_s &aid_src);
 	void resetHorizontalPositionToGnss(estimator_aid_source2d_s &aid_src);
 	bool shouldResetGpsFusion() const;
 
