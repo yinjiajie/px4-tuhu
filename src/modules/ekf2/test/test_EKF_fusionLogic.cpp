@@ -210,7 +210,7 @@ TEST_F(EkfFusionLogicTest, fallbackFromGpsToFlow)
 	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
 }
 
-TEST_F(EkfFusionLogicTest, gpsToFlowTransitionLogsHorizontalPositionAndVelocityDeltas)
+TEST_F(EkfFusionLogicTest, gpsToFlowTransitionKeepsHorizontalStateContinuity)
 {
 	ResetLoggingChecker reset_logging_checker(_ekf);
 
@@ -238,15 +238,13 @@ TEST_F(EkfFusionLogicTest, gpsToFlowTransitionLogsHorizontalPositionAndVelocityD
 	_sensor_simulator.stopGps();
 	_sensor_simulator.runSeconds(11);
 
-	// THEN: flow remains active and the transition is logged through horizontal position and velocity resets
+	// THEN: flow remains active and the local position frame and velocity remain continuous
 	EXPECT_FALSE(_ekf_wrapper.isIntendingGpsFusion());
 	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
 
 	reset_logging_checker.capturePostResetState();
-	EXPECT_TRUE(reset_logging_checker.isHorizontalVelocityResetCounterIncreasedBy(1));
-	EXPECT_TRUE(reset_logging_checker.isHorizontalPositionResetCounterIncreasedBy(1));
-	EXPECT_TRUE(reset_logging_checker.isVelocityDeltaLoggedCorrectly(1e-2f));
-	EXPECT_TRUE(reset_logging_checker.isPositionDeltaLoggedCorrectly(1e-2f));
+	EXPECT_TRUE(reset_logging_checker.isHorizontalVelocityResetCounterIncreasedBy(0));
+	EXPECT_TRUE(reset_logging_checker.isHorizontalPositionResetCounterIncreasedBy(0));
 }
 
 TEST_F(EkfFusionLogicTest, flowToGpsSmoothStartLogsHorizontalVelocityDelta)
@@ -278,7 +276,6 @@ TEST_F(EkfFusionLogicTest, flowToGpsSmoothStartLogsHorizontalVelocityDelta)
 	_ekf->get_velNE_reset(delta_vxy, &vel_reset_counter_before);
 	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_before);
 	_ekf->get_velD_reset(&delta_vz_before, &veld_reset_counter_before);
-
 	const Vector3f velocity_before_reset = _ekf->getVelocity();
 	const Vector3f simulated_gps_velocity{0.7f, -0.4f, 0.25f};
 
