@@ -73,10 +73,6 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 			&& _pos_ref.isInitialized()
 			&& PX4_ISFINITE(_state.pos(0))
 			&& PX4_ISFINITE(_state.pos(1));
-	const bool smooth_start_with_existing_horizontal_velocity_aiding =
-		smooth_start_with_existing_horizontal_aiding
-		&& !isTimedOut(_time_last_hor_vel_fuse, _params.reset_timeout_max)
-		&& _control_status_prev.flags.yaw_align;
 
 	if (_gps_data_ready) {
 		const gnssSample &gnss_sample = _gps_sample_delayed;
@@ -174,10 +170,7 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 				_information_events.flags.starting_gps_fusion = true;
 
 				if (gnss_vel_enabled) {
-					if (smooth_start_with_existing_horizontal_velocity_aiding) {
-						resetHorizontalVelocityToGnss(_aid_src_gnss_vel);
-
-					} else if (!isHorizontalAidingActive()
+					if (!isHorizontalAidingActive()
 						   || isTimedOut(_time_last_hor_vel_fuse, _params.reset_timeout_max)
 						   || !_control_status_prev.flags.yaw_align
 						  ) {
@@ -310,14 +303,6 @@ void Ekf::resetVelocityToGnss(estimator_aid_source3d_s &aid_src)
 {
 	_information_events.flags.reset_vel_to_gps = true;
 	resetVelocityTo(Vector3f(aid_src.observation), Vector3f(aid_src.observation_variance));
-	aid_src.time_last_fuse = _time_delayed_us;
-}
-
-void Ekf::resetHorizontalVelocityToGnss(estimator_aid_source3d_s &aid_src)
-{
-	_information_events.flags.reset_vel_to_gps = true;
-	resetHorizontalVelocityTo(Vector2f{aid_src.observation[0], aid_src.observation[1]},
-				  Vector2f{aid_src.observation_variance[0], aid_src.observation_variance[1]});
 	aid_src.time_last_fuse = _time_delayed_us;
 }
 
