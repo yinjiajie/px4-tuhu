@@ -184,3 +184,9 @@ param set BAT1_V_DIV 16.4814
 param set BAT1_SOURCE 1
 
 param set-default COM_ACT_UNLOCK 1
+
+param set CAL_MAG0_PRIO 50
+param set CAL_MAG0_ROT -1
+
+param set CAL_MAG1_PRIO 75
+param set CAL_MAG1_ROT 0
