@@ -78,7 +78,8 @@ void Ekf::controlOpticalFlowFusion(const imuSample &imu_delayed)
 					|| isOnlyActiveSourceOfHorizontalAiding(_control_status.flags.opt_flow));
 
 		// Only allow optical flow aiding as a fallback when GNSS horizontal aiding is not healthy.
-		const bool gps_recently_passing_checks = !isTimedOut(_last_gps_pass_us, _params.reset_timeout_max);
+		const bool gps_recently_passing_checks = !isTimedOut(_last_gps_pass_us,
+				static_cast<uint64_t>(_params.gps_fail_timeout_max));
 		const bool gps_is_healthy_for_horizontal_aiding = _control_status.flags.gps
 							      && gps_recently_passing_checks
 							      && !_gps_intermittent;

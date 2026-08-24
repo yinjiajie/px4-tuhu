@@ -332,6 +332,7 @@ struct parameters {
 	float req_pdop{2.0f};                   ///< maximum acceptable position dilution of precision
 	float req_hdrift{0.3f};                 ///< maximum acceptable horizontal drift speed (m/s)
 	float req_vdrift{0.5f};                 ///< maximum acceptable vertical drift speed (m/s)
+	int32_t gps_fail_timeout_max{7'000'000}; ///< maximum time after the last passing GPS quality check before stopping GNSS aiding (uSec)
 
 # if defined(CONFIG_EKF2_GNSS_YAW)
 	// GNSS heading fusion

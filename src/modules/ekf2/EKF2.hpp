@@ -535,20 +535,21 @@ private:
 		(ParamExtFloat<px4::params::EKF2_GPS_P_NOISE>) _param_ekf2_gps_p_noise,
 
 		(ParamExtFloat<px4::params::EKF2_GPS_P_GATE>) _param_ekf2_gps_p_gate,
-		(ParamExtFloat<px4::params::EKF2_GPS_V_GATE>) _param_ekf2_gps_v_gate,
+			(ParamExtFloat<px4::params::EKF2_GPS_V_GATE>) _param_ekf2_gps_v_gate,
 
-		(ParamExtInt<px4::params::EKF2_GPS_CHECK>) _param_ekf2_gps_check,
-		(ParamExtFloat<px4::params::EKF2_REQ_EPH>)    _param_ekf2_req_eph,
-		(ParamExtFloat<px4::params::EKF2_REQ_EPV>)    _param_ekf2_req_epv,
-		(ParamExtFloat<px4::params::EKF2_REQ_SACC>)   _param_ekf2_req_sacc,
-		(ParamExtInt<px4::params::EKF2_REQ_NSATS>)    _param_ekf2_req_nsats,
-		(ParamExtFloat<px4::params::EKF2_REQ_PDOP>)   _param_ekf2_req_pdop,
-		(ParamExtFloat<px4::params::EKF2_REQ_HDRIFT>) _param_ekf2_req_hdrift,
-		(ParamExtFloat<px4::params::EKF2_REQ_VDRIFT>) _param_ekf2_req_vdrift,
-		(ParamFloat<px4::params::EKF2_REQ_GPS_H>)     _param_ekf2_req_gps_h,
+			(ParamExtInt<px4::params::EKF2_GPS_CHECK>) _param_ekf2_gps_check,
+			(ParamExtFloat<px4::params::EKF2_REQ_EPH>) _param_ekf2_req_eph,
+			(ParamExtFloat<px4::params::EKF2_REQ_EPV>) _param_ekf2_req_epv,
+			(ParamExtFloat<px4::params::EKF2_REQ_SACC>) _param_ekf2_req_sacc,
+			(ParamExtInt<px4::params::EKF2_REQ_NSATS>) _param_ekf2_req_nsats,
+			(ParamExtFloat<px4::params::EKF2_REQ_PDOP>) _param_ekf2_req_pdop,
+			(ParamExtFloat<px4::params::EKF2_REQ_HDRIFT>) _param_ekf2_req_hdrift,
+			(ParamExtFloat<px4::params::EKF2_REQ_VDRIFT>) _param_ekf2_req_vdrift,
+			(ParamFloat<px4::params::EKF2_REQ_GPS_H>) _param_ekf2_req_gps_h,
+			(ParamExtInt<px4::params::EKF2_GPSF_TOUT>) _param_ekf2_gps_fail_tout,
 
-		// Used by EKF-GSF experimental yaw estimator
-		(ParamExtFloat<px4::params::EKF2_GSF_TAS>) _param_ekf2_gsf_tas_default,
+			// Used by EKF-GSF experimental yaw estimator
+			(ParamExtFloat<px4::params::EKF2_GSF_TAS>) _param_ekf2_gsf_tas_default,
 #endif // CONFIG_EKF2_GNSS
 
 #if defined(CONFIG_EKF2_BAROMETER)

@@ -1243,6 +1243,17 @@ parameters:
       decimal: 1
       unit: s
       reboot_required: true
+    EKF2_GPSF_TOUT:
+      description:
+        short: Time to stop GPS after quality fails
+        long: Maximum lapsed time since the last passing GPS quality check before
+          EKF2 stops GNSS horizontal aiding and allows optical flow fallback to treat
+          GPS as unhealthy.
+      type: int32
+      default: 7000000
+      min: 500000
+      max: 10000000
+      unit: us
     EKF2_MAG_CHECK:
       description:
         short: Magnetic field strength test selection

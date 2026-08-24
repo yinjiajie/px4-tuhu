@@ -95,6 +95,7 @@ EKF2::EKF2(bool multi_mode, const px4::wq_config_t &config, bool replay_mode):
 	_param_ekf2_req_pdop(_params->req_pdop),
 	_param_ekf2_req_hdrift(_params->req_hdrift),
 	_param_ekf2_req_vdrift(_params->req_vdrift),
+	_param_ekf2_gps_fail_tout(_params->gps_fail_timeout_max),
 	_param_ekf2_gsf_tas_default(_params->EKFGSF_tas_default),
 #endif // CONFIG_EKF2_GNSS
 #if defined(CONFIG_EKF2_BAROMETER)

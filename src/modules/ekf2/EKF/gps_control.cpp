@@ -85,16 +85,17 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 
 			collect_gps(gnss_sample);
 
-		} else {
-			// Skip this sample
-			_gps_data_ready = false;
+			} else {
+				// Skip this sample
+				_gps_data_ready = false;
 
-			if (_control_status.flags.gps && isTimedOut(_last_gps_pass_us, _params.reset_timeout_max)) {
-				stopGpsFusion();
-				_warning_events.flags.gps_quality_poor = true;
-				ECL_WARN("GPS quality poor - stopping use");
+				if (_control_status.flags.gps
+				    && isTimedOut(_last_gps_pass_us, static_cast<uint64_t>(_params.gps_fail_timeout_max))) {
+					stopGpsFusion();
+					_warning_events.flags.gps_quality_poor = true;
+					ECL_WARN("GPS quality poor - stopping use");
+				}
 			}
-		}
 
 		if (smooth_start_with_existing_horizontal_aiding) {
 			// Keep the current local frame continuous when GNSS starts after another local aiding source.
