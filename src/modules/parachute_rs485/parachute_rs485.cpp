@@ -49,6 +49,7 @@
 
 #include <uORB/Publication.hpp>
 #include <uORB/Subscription.hpp>
+#include <uORB/topics/debug_array.h>
 #include <uORB/topics/parachute_status.h>
 #include <uORB/topics/vehicle_command.h>
 
@@ -60,6 +61,9 @@ extern "C" __EXPORT int parachute_rs485_main(int argc, char *argv[]);
 namespace
 {
 static constexpr px4::wq_config_t parachute_rs485_wq{"wq:parachute_rs485", 6000, -18};
+static constexpr uint16_t kParachuteDebugArrayId{0x5053};
+static constexpr size_t kParachuteDebugArrayUsedFields{7};
+static constexpr float kParachuteVoltageReadyMinV{4.0f};
 }
 
 class ParachuteRS485 : public ModuleBase<ParachuteRS485>, public px4::ScheduledWorkItem
@@ -192,6 +196,8 @@ word is expected in `COMMAND_ACK.result_param2` for `MAV_CMD_DO_PARACHUTE`.
 
 	bool init()
 	{
+		initialize_default_command();
+		publish_debug_status(hrt_absolute_time());
 		ScheduleOnInterval(kUpdateInterval);
 		return true;
 	}
@@ -293,6 +299,13 @@ private:
 		return "unknown";
 	}
 
+	enum class DebugStatusCode : uint8_t {
+		NotInstalled = 0,
+		Ready = 1,
+		Triggered = 2,
+		Error = 3
+	};
+
 	void set_stage(RunStage stage)
 	{
 		_run_stage = stage;
@@ -329,6 +342,18 @@ private:
 		}
 
 		return true;
+	}
+
+	void initialize_default_command()
+	{
+		_last_command.timestamp = hrt_absolute_time();
+		_last_command.command = vehicle_command_s::VEHICLE_CMD_DO_PARACHUTE;
+		_last_command.param1 = static_cast<float>(vehicle_command_s::PARACHUTE_ACTION_DISABLE);
+		_last_command.source_system = 1;
+		_last_command.target_system = 1;
+		_last_command.source_component = 1;
+		_last_command.target_component = MAV_COMP_ID_PARACHUTE;
+		_command_valid = true;
 	}
 
 	ssize_t read_reply_with_timeout(uint8_t *buffer, size_t buffer_size, hrt_abstime timeout_us)
@@ -405,6 +430,39 @@ private:
 		return PX4_OK;
 	}
 
+	DebugStatusCode get_debug_status_code(const parachute_status_s &status) const
+	{
+		if (!status.connected) {
+			return DebugStatusCode::NotInstalled;
+		}
+
+		const bool voltage_valid = PX4_ISFINITE(status.voltage_v) && (status.voltage_v >= kParachuteVoltageReadyMinV);
+		return voltage_valid ? DebugStatusCode::Ready : DebugStatusCode::Error;
+	}
+
+	void publish_debug_status(hrt_abstime now)
+	{
+		debug_array_s debug{};
+		debug.timestamp = now;
+		debug.id = kParachuteDebugArrayId;
+		strncpy(debug.name, "para_stat", sizeof(debug.name) - 1);
+
+		const bool connected = _last_status.connected;
+		debug.data[0] = static_cast<float>(static_cast<uint8_t>(get_debug_status_code(_last_status)));
+		debug.data[1] = connected ? 1.f : 0.f;
+		debug.data[2] = connected ? _last_status.voltage_v : NAN;
+		debug.data[3] = connected ? _last_status.height_above_takeoff_m : NAN;
+		debug.data[4] = connected ? static_cast<float>(_last_status.release_source) : NAN;
+		debug.data[5] = connected ? static_cast<float>(_last_status.flags) : NAN;
+		debug.data[6] = connected ? static_cast<float>(_last_status.state) : NAN;
+
+		for (size_t i = kParachuteDebugArrayUsedFields; i < debug_array_s::ARRAY_SIZE; ++i) {
+			debug.data[i] = NAN;
+		}
+
+		_debug_array_pub.publish(debug);
+	}
+
 	void Run() override
 	{
 		_last_run_start = hrt_absolute_time();
@@ -419,7 +477,9 @@ private:
 
 		set_stage(RunStage::OpenSerial);
 		if (!open_serial()) {
-			publish_disconnected_if_needed(hrt_absolute_time());
+			const hrt_abstime now = hrt_absolute_time();
+			publish_disconnected_if_needed(now);
+			publish_debug_status(now);
 			return;
 		}
 
@@ -427,9 +487,11 @@ private:
 		update_command();
 
 		if (!_command_valid) {
-			publish_disconnected_if_needed(hrt_absolute_time());
+			const hrt_abstime now = hrt_absolute_time();
+			publish_disconnected_if_needed(now);
 			set_stage(RunStage::Idle);
 			_last_run_complete = hrt_absolute_time();
+			publish_debug_status(now);
 			return;
 		}
 
@@ -443,6 +505,7 @@ private:
 			PX4_WARN("write failed");
 			close_serial();
 			publish_disconnected_if_needed(now);
+			publish_debug_status(now);
 			return;
 		}
 
@@ -495,6 +558,7 @@ private:
 
 		set_stage(RunStage::Idle);
 		_last_run_complete = hrt_absolute_time();
+		publish_debug_status(hrt_absolute_time());
 	}
 
 	void update_command()
@@ -649,6 +713,7 @@ private:
 	const bool _invert;
 
 	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};
+	uORB::Publication<debug_array_s> _debug_array_pub{ORB_ID(debug_array)};
 	uORB::Publication<parachute_status_s> _parachute_status_pub{ORB_ID(parachute_status)};
 
 	vehicle_command_s _last_command {};
