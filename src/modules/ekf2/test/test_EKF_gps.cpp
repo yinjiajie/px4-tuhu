@@ -245,3 +245,29 @@ TEST_F(EkfGpsTest, preTakeoffFixedGpsRealignsGnssHeightOrigin)
 	EXPECT_NEAR(_ekf->getPosition()(2), 0.f, 0.5f);
 	EXPECT_NEAR(_ekf->getEkfGlobalOriginAltitude(), origin_alt_before + 4.f, 0.6f);
 }
+
+TEST_F(EkfGpsTest, preTakeoffFixedGpsStartRealignsGnssHeightOrigin)
+{
+	// GIVEN: baro is holding a biased local z estimate while the vehicle is still at rest
+	_ekf_wrapper.setBaroHeightRef();
+	_ekf_wrapper.enableBaroHeightFusion();
+	_sensor_simulator.runSeconds(1);
+
+	const float baro_increment = 2.f;
+	_sensor_simulator._baro.setData(_sensor_simulator._baro.getData() + baro_increment);
+	_sensor_simulator.runSeconds(40);
+
+	EXPECT_NEAR(_ekf->getPosition()(2), -baro_increment, 0.4f);
+	EXPECT_EQ(_ekf->getHeightSensorRef(), HeightSensor::BARO);
+
+	// WHEN: GNSS height is enabled after the receiver is already RTK fixed
+	_sensor_simulator._gps.setFixType(6);
+	_ekf_wrapper.setGpsHeightRef();
+	_ekf_wrapper.enableGpsHeightFusion();
+	_sensor_simulator.runSeconds(3);
+
+	// THEN: the origin is aligned to the current GNSS altitude instead of preserving the old baro offset
+	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsHeightFusion());
+	EXPECT_EQ(_ekf->getHeightSensorRef(), HeightSensor::GNSS);
+	EXPECT_NEAR(_ekf->getPosition()(2), 0.f, 0.5f);
+}

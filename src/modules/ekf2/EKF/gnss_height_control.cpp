@@ -75,8 +75,24 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 		const float innov_gate = math::max(_params.gps_pos_innov_gate, 1.f);
 
 		const bool measurement_valid = PX4_ISFINITE(measurement) && PX4_ISFINITE(measurement_var);
+		const bool pre_takeoff_at_rest = !_control_status.flags.in_air && _control_status.flags.vehicle_at_rest;
+		const bool gps_is_rtk_fixed = gps_sample.fix_type >= kGnssFixTypeRtkFixed;
 		const bool gps_entered_rtk_fixed = (_gps_prev_fix_type < kGnssFixTypeRtkFixed)
-					   && (gps_sample.fix_type >= kGnssFixTypeRtkFixed);
+					   && gps_is_rtk_fixed;
+
+		const auto realign_gnss_height_origin = [&](float aligned_origin_alt) {
+			if (PX4_ISFINITE(aligned_origin_alt)
+			    && setEkfGlobalOrigin(_pos_ref.getProjectionReferenceLat(),
+						  _pos_ref.getProjectionReferenceLon(),
+						  aligned_origin_alt,
+						  _gpos_origin_eph,
+						  gps_sample.vacc)) {
+				ECL_INFO("realigned GNSS height origin before takeoff");
+				return true;
+			}
+
+			return false;
+		};
 
 		// GNSS position, vertical position GNSS measurement has opposite sign to earth z axis
 		updateVerticalPositionAidSrcStatus(gps_sample.time_us,
@@ -133,25 +149,12 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 					ECL_WARN("stopping %s height fusion, fusion failing", HGT_SRC_NAME);
 					stopGpsHgtFusion();
 
-				} else if (!_control_status.flags.in_air
-					   && _control_status.flags.vehicle_at_rest
+				} else if (pre_takeoff_at_rest
 					   && (_height_sensor_ref == HeightSensor::GNSS)
 					   && gps_entered_rtk_fixed) {
 					// If the origin was built from a coarse GNSS solution, align its altitude
 					// once when GNSS enters RTK fixed before takeoff so local z stays near zero.
-					const Vector3f origin_pos_offset_body = _params.gps_pos_body - _params.imu_pos_body;
-					const Vector3f origin_pos_offset_earth = _R_to_earth * origin_pos_offset_body;
-					const float gnss_alt_body = gps_sample.alt + origin_pos_offset_earth(2);
-					const float aligned_origin_alt = gnss_alt_body - bias_est.getBias();
-
-					if (PX4_ISFINITE(aligned_origin_alt)
-					    && setEkfGlobalOrigin(_pos_ref.getProjectionReferenceLat(),
-								  _pos_ref.getProjectionReferenceLon(),
-								  aligned_origin_alt,
-								  _gpos_origin_eph,
-								  gps_sample.vacc)) {
-						ECL_INFO("realigned GNSS height origin before takeoff");
-					}
+					realign_gnss_height_origin(gnss_alt - bias_est.getBias());
 				}
 
 			} else {
@@ -166,8 +169,17 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 					&& isOtherSourceOfVerticalPositionAidingThan(_control_status.flags.gps_hgt)
 					&& PX4_ISFINITE(_state.pos(2))
 					&& PX4_ISFINITE(measurement);
+				const bool start_with_pre_takeoff_rtk_realign =
+					(_params.height_sensor_ref == static_cast<int32_t>(HeightSensor::GNSS))
+					&& pre_takeoff_at_rest
+					&& gps_is_rtk_fixed;
 
-				if (smooth_start_with_existing_vertical_aiding) {
+				if (start_with_pre_takeoff_rtk_realign && realign_gnss_height_origin(gnss_alt)) {
+					ECL_INFO("starting %s height fusion, realigning origin", HGT_SRC_NAME);
+					_height_sensor_ref = HeightSensor::GNSS;
+					bias_est.reset();
+
+				} else if (smooth_start_with_existing_vertical_aiding) {
 					ECL_INFO("starting %s height fusion, aligning reference", HGT_SRC_NAME);
 					_height_sensor_ref = HeightSensor::GNSS;
 					_gps_alt_ref = gps_sample.alt + _state.pos(2);
