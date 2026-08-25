@@ -668,6 +668,7 @@ private:
 	uint64_t _last_gps_pass_us{0};		///< last system time in usec that the GPS passed it's checks
 	uint32_t _min_gps_health_time_us{10000000}; ///< GPS is marked as healthy only after this amount of time
 	bool _gps_checks_passed{false};		///> true when all active GPS checks have passed
+	uint8_t _gps_prev_fix_type{0};		///< previous GNSS fix type, used to detect entry into RTK fixed
 
 	gps_check_fail_status_u _gps_check_fail_status{};
 	// height sensor status

@@ -221,3 +221,27 @@ TEST_F(EkfGpsTest, altitudeDrift)
 	// THEN: the baro and local position should follow it
 	EXPECT_LT(fabsf(baro_innov), 0.1f);
 }
+
+TEST_F(EkfGpsTest, preTakeoffFixedGpsRealignsGnssHeightOrigin)
+{
+	// GIVEN: GNSS is the active height reference and the origin was initialized from a 3D fix
+	_ekf_wrapper.setGpsHeightRef();
+	_ekf_wrapper.enableGpsHeightFusion();
+	_sensor_simulator._gps.setFixType(3);
+	_sensor_simulator.runSeconds(3);
+
+	ASSERT_TRUE(_ekf_wrapper.isIntendingGpsHeightFusion());
+	ASSERT_EQ(_ekf->getHeightSensorRef(), HeightSensor::GNSS);
+
+	const float origin_alt_before = _ekf->getEkfGlobalOriginAltitude();
+	EXPECT_NEAR(_ekf->getPosition()(2), 0.f, 0.3f);
+
+	// WHEN: the receiver enters RTK fixed and reports the more accurate altitude
+	_sensor_simulator._gps.setFixType(6);
+	_sensor_simulator._gps.stepHeightByMeters(4.f);
+	_sensor_simulator.runSeconds(5);
+
+	// THEN: the pre-takeoff height origin is realigned and local z stays near zero
+	EXPECT_NEAR(_ekf->getPosition()(2), 0.f, 0.5f);
+	EXPECT_NEAR(_ekf->getEkfGlobalOriginAltitude(), origin_alt_before + 4.f, 0.6f);
+}

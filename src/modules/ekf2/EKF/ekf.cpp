@@ -92,6 +92,7 @@ void Ekf::reset()
 #if defined(CONFIG_EKF2_GNSS)
 	resetGpsDriftCheckFilters();
 	_gps_checks_passed = false;
+	_gps_prev_fix_type = 0;
 #endif // CONFIG_EKF2_GNSS
 	_gps_alt_ref = NAN;
 

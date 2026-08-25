@@ -38,6 +38,11 @@
 
 #include "ekf.h"
 
+namespace
+{
+constexpr uint8_t kGnssFixTypeRtkFixed = 6;
+}
+
 void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 {
 	static constexpr const char *HGT_SRC_NAME = "GNSS";
@@ -70,6 +75,8 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 		const float innov_gate = math::max(_params.gps_pos_innov_gate, 1.f);
 
 		const bool measurement_valid = PX4_ISFINITE(measurement) && PX4_ISFINITE(measurement_var);
+		const bool gps_entered_rtk_fixed = (_gps_prev_fix_type < kGnssFixTypeRtkFixed)
+					   && (gps_sample.fix_type >= kGnssFixTypeRtkFixed);
 
 		// GNSS position, vertical position GNSS measurement has opposite sign to earth z axis
 		updateVerticalPositionAidSrcStatus(gps_sample.time_us,
@@ -125,6 +132,26 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 					// Some other height source is still working
 					ECL_WARN("stopping %s height fusion, fusion failing", HGT_SRC_NAME);
 					stopGpsHgtFusion();
+
+				} else if (!_control_status.flags.in_air
+					   && _control_status.flags.vehicle_at_rest
+					   && (_height_sensor_ref == HeightSensor::GNSS)
+					   && gps_entered_rtk_fixed) {
+					// If the origin was built from a coarse GNSS solution, align its altitude
+					// once when GNSS enters RTK fixed before takeoff so local z stays near zero.
+					const Vector3f origin_pos_offset_body = _params.gps_pos_body - _params.imu_pos_body;
+					const Vector3f origin_pos_offset_earth = _R_to_earth * origin_pos_offset_body;
+					const float gnss_alt_body = gps_sample.alt + origin_pos_offset_earth(2);
+					const float aligned_origin_alt = gnss_alt_body - bias_est.getBias();
+
+					if (PX4_ISFINITE(aligned_origin_alt)
+					    && setEkfGlobalOrigin(_pos_ref.getProjectionReferenceLat(),
+								  _pos_ref.getProjectionReferenceLon(),
+								  aligned_origin_alt,
+								  _gpos_origin_eph,
+								  gps_sample.vacc)) {
+						ECL_INFO("realigned GNSS height origin before takeoff");
+					}
 				}
 
 			} else {
@@ -166,6 +193,8 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 				_control_status.flags.gps_hgt = true;
 			}
 		}
+
+		_gps_prev_fix_type = gps_sample.fix_type;
 
 	} else if (_control_status.flags.gps_hgt
 		   && !isNewestSampleRecent(_time_last_gps_buffer_push, 2 * GNSS_MAX_INTERVAL)) {
