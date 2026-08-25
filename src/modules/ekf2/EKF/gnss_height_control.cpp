@@ -87,6 +87,10 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 						  aligned_origin_alt,
 						  _gpos_origin_eph,
 						  gps_sample.vacc)) {
+				// Recenter local z on the new origin so pre-takeoff height stays near zero.
+				const float gps_hgt_bias = bias_est.getBias();
+				resetVerticalPositionTo(0.f, measurement_var);
+				bias_est.setBias(gps_hgt_bias);
 				ECL_INFO("realigned GNSS height origin before takeoff");
 				return true;
 			}

@@ -271,3 +271,33 @@ TEST_F(EkfGpsTest, preTakeoffFixedGpsStartRealignsGnssHeightOrigin)
 	EXPECT_EQ(_ekf->getHeightSensorRef(), HeightSensor::GNSS);
 	EXPECT_NEAR(_ekf->getPosition()(2), 0.f, 0.5f);
 }
+
+TEST_F(EkfGpsTest, preTakeoffFixedGpsRealignsCoarseGnssHeightReference)
+{
+	// GIVEN: GNSS height is already active from a coarse 3D fix and local z has drifted away from zero
+	_ekf_wrapper.setGpsHeightRef();
+	_ekf_wrapper.enableGpsHeightFusion();
+	_sensor_simulator._gps.setFixType(3);
+	_sensor_simulator.runSeconds(3);
+
+	ASSERT_TRUE(_ekf_wrapper.isIntendingGpsHeightFusion());
+	ASSERT_EQ(_ekf->getHeightSensorRef(), HeightSensor::GNSS);
+
+	const float dt = 0.2f;
+	const float height_rate = -0.15f;
+
+	for (int i = 0; i < 150; i++) {
+		_sensor_simulator._gps.stepHeightByMeters(height_rate * dt);
+		_sensor_simulator.runSeconds(dt);
+	}
+
+	EXPECT_GT(_ekf->getPosition()(2), 0.5f);
+
+	// WHEN: the receiver enters RTK fixed and reports the corrected ground altitude
+	_sensor_simulator._gps.setFixType(6);
+	_sensor_simulator._gps.stepHeightByMeters(-5.f);
+	_sensor_simulator.runSeconds(5);
+
+	// THEN: the origin is realigned and local z is recentered near zero
+	EXPECT_NEAR(_ekf->getPosition()(2), 0.f, 0.5f);
+}
