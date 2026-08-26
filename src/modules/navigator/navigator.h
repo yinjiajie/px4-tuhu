@@ -64,6 +64,9 @@
 #include <uORB/Publication.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionInterval.hpp>
+#include <uORB/SubscriptionMultiArray.hpp>
+#include <uORB/topics/battery_status.h>
+#include <uORB/topics/debug_array.h>
 #include <uORB/topics/geofence_result.h>
 #include <uORB/topics/gimbal_manager_set_attitude.h>
 #include <uORB/topics/home_position.h>
@@ -73,10 +76,13 @@
 #include <uORB/topics/position_controller_landing_status.h>
 #include <uORB/topics/position_controller_status.h>
 #include <uORB/topics/position_setpoint_triplet.h>
+#include <uORB/topics/sensor_selection.h>
 #include <uORB/topics/transponder_report.h>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_command_ack.h>
+#include <uORB/topics/vehicle_air_data.h>
 #include <uORB/topics/vehicle_global_position.h>
+#include <uORB/topics/vehicle_imu_status.h>
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/vehicle_land_detected.h>
 #include <uORB/topics/vehicle_local_position.h>
@@ -299,10 +305,16 @@ private:
 	uORB::Subscription _home_pos_sub{ORB_ID(home_position)};		/**< home position subscription */
 	uORB::Subscription _land_detected_sub{ORB_ID(vehicle_land_detected)};	/**< vehicle land detected subscription */
 	uORB::Subscription _pos_ctrl_landing_status_sub{ORB_ID(position_controller_landing_status)};	/**< position controller landing status subscription */
+	uORB::Subscription _sensor_selection_sub{ORB_ID(sensor_selection)};
 	uORB::Subscription _traffic_sub{ORB_ID(transponder_report)};		/**< traffic subscription */
+	uORB::Subscription _vehicle_air_data_sub{ORB_ID(vehicle_air_data)};
 	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};	/**< vehicle commands (onboard and offboard) */
+	uORB::SubscriptionMultiArray<battery_status_s, battery_status_s::MAX_INSTANCES> _battery_status_subs{ORB_ID::battery_status};
+	static constexpr uint8_t MAX_VEHICLE_IMU_STATUS_INSTANCES{4};
+	uORB::SubscriptionMultiArray<vehicle_imu_status_s, MAX_VEHICLE_IMU_STATUS_INSTANCES> _vehicle_imu_status_subs{ORB_ID::vehicle_imu_status};
 
 	uORB::Publication<geofence_result_s>		_geofence_result_pub{ORB_ID(geofence_result)};
+	uORB::Publication<debug_array_s>		_mission_return_debug_pub{ORB_ID(debug_array)};
 	uORB::Publication<mission_result_s>		_mission_result_pub{ORB_ID(mission_result)};
 	uORB::Publication<position_setpoint_triplet_s>	_pos_sp_triplet_pub{ORB_ID(position_setpoint_triplet)};
 	uORB::Publication<vehicle_command_ack_s>	_vehicle_cmd_ack_pub{ORB_ID(vehicle_command_ack)};
@@ -335,6 +347,7 @@ private:
 	hrt_abstime _last_geofence_check = 0;
 
 	hrt_abstime _wait_for_vehicle_status_timestamp{0}; /**< If non-zero, wait for vehicle_status update before processing next cmd */
+	hrt_abstime _last_mission_return_debug_pub{0};
 
 	bool		_geofence_reposition_sent{false};		/**< flag if reposition command has been sent for current geofence breach*/
 	hrt_abstime	_time_loitering_after_gf_breach{0};		/**< timestamp of when loitering after a geofence breach was started */
@@ -385,7 +398,11 @@ private:
 	 */
 	void publish_mission_result();
 
+	void publish_mission_return_debug(bool valid);
 	void publish_vehicle_command_ack(const vehicle_command_s &cmd, uint8_t result);
+	void update_mission_return_debug();
+	bool get_battery_for_debug(battery_status_s &battery);
+	float get_primary_accel_vibration_metric();
 
 	bool geofence_allows_position(const vehicle_global_position_s &pos);
 
