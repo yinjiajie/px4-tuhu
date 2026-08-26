@@ -81,8 +81,10 @@
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_command_ack.h>
 #include <uORB/topics/vehicle_air_data.h>
+#include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_imu_status.h>
+#include <uORB/topics/vehicle_magnetometer.h>
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/vehicle_land_detected.h>
 #include <uORB/topics/vehicle_local_position.h>
@@ -308,8 +310,10 @@ private:
 	uORB::Subscription _sensor_selection_sub{ORB_ID(sensor_selection)};
 	uORB::Subscription _traffic_sub{ORB_ID(transponder_report)};		/**< traffic subscription */
 	uORB::Subscription _vehicle_air_data_sub{ORB_ID(vehicle_air_data)};
+	uORB::Subscription _vehicle_attitude_sub{ORB_ID(vehicle_attitude)};
 	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};	/**< vehicle commands (onboard and offboard) */
 	uORB::SubscriptionMultiArray<battery_status_s, battery_status_s::MAX_INSTANCES> _battery_status_subs{ORB_ID::battery_status};
+	uORB::SubscriptionMultiArray<vehicle_magnetometer_s> _vehicle_magnetometer_subs{ORB_ID::vehicle_magnetometer};
 	static constexpr uint8_t MAX_VEHICLE_IMU_STATUS_INSTANCES{4};
 	uORB::SubscriptionMultiArray<vehicle_imu_status_s, MAX_VEHICLE_IMU_STATUS_INSTANCES> _vehicle_imu_status_subs{ORB_ID::vehicle_imu_status};
 
@@ -402,6 +406,8 @@ private:
 	void publish_vehicle_command_ack(const vehicle_command_s &cmd, uint8_t result);
 	void update_mission_return_debug();
 	bool get_battery_for_debug(battery_status_s &battery);
+	void get_magnetometer_headings_for_debug(float (&headings_deg)[2]);
+	float get_dual_antenna_heading_deg();
 	float get_primary_accel_vibration_metric();
 
 	bool geofence_allows_position(const vehicle_global_position_s &pos);

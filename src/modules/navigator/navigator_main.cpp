@@ -54,6 +54,7 @@
 #include <lib/geo/geo.h>
 #include <lib/adsb/AdsbConflict.h>
 #include <lib/mathlib/mathlib.h>
+#include <matrix/math.hpp>
 #include <px4_platform_common/px4_config.h>
 #include <px4_platform_common/defines.h>
 #include <px4_platform_common/events.h>
@@ -67,6 +68,9 @@ namespace navigator
 {
 Navigator *g_navigator;
 }
+
+using matrix::Eulerf;
+using matrix::Quatf;
 
 static constexpr uint16_t MISSION_RETURN_DEBUG_ARRAY_ID = 0x4d52;
 static constexpr size_t MISSION_RETURN_DEBUG_ARRAY_USED_FIELDS = 13;
@@ -139,9 +143,12 @@ void Navigator::publish_mission_return_debug(bool valid)
 	debug.id = MISSION_RETURN_DEBUG_ARRAY_ID;
 	strncpy(debug.name, "mis_rtrn", sizeof(debug.name) - 1);
 	debug.data[0] = valid ? 1.f : 0.f;
-	debug.data[1] = NAN;
-	debug.data[2] = NAN;
-	debug.data[3] = NAN;
+
+	float mag_headings_deg[2] {NAN, NAN};
+	get_magnetometer_headings_for_debug(mag_headings_deg);
+	debug.data[1] = mag_headings_deg[0];
+	debug.data[2] = mag_headings_deg[1];
+	debug.data[3] = get_dual_antenna_heading_deg();
 	debug.data[4] = NAN;
 	debug.data[5] = NAN;
 	debug.data[6] = NAN;
@@ -195,6 +202,61 @@ bool Navigator::get_battery_for_debug(battery_status_s &battery)
 	}
 
 	return found_battery;
+}
+
+void Navigator::get_magnetometer_headings_for_debug(float (&headings_deg)[2])
+{
+	vehicle_attitude_s attitude{};
+
+	if (!_vehicle_attitude_sub.copy(&attitude)) {
+		return;
+	}
+
+	const Eulerf euler{Quatf{attitude.q}};
+	const float roll = euler.phi();
+	const float pitch = euler.theta();
+
+	if (!PX4_ISFINITE(roll) || !PX4_ISFINITE(pitch)) {
+		return;
+	}
+
+	size_t heading_index = 0;
+
+	for (auto &mag_sub : _vehicle_magnetometer_subs) {
+		vehicle_magnetometer_s magnetometer{};
+
+		if (!mag_sub.copy(&magnetometer) || (magnetometer.device_id == 0)) {
+			continue;
+		}
+
+		const float mx = magnetometer.magnetometer_ga[0];
+		const float my = magnetometer.magnetometer_ga[1];
+		const float mz = magnetometer.magnetometer_ga[2];
+
+		if (!PX4_ISFINITE(mx) || !PX4_ISFINITE(my) || !PX4_ISFINITE(mz)) {
+			continue;
+		}
+
+		const float xh = mx * cosf(pitch)
+				 + my * sinf(roll) * sinf(pitch)
+				 + mz * cosf(roll) * sinf(pitch);
+		const float yh = my * cosf(roll) - mz * sinf(roll);
+
+		if (PX4_ISFINITE(xh) && PX4_ISFINITE(yh)) {
+			headings_deg[heading_index++] = math::degrees(atan2f(-yh, xh));
+		}
+
+		if (heading_index >= 2) {
+			break;
+		}
+	}
+}
+
+float Navigator::get_dual_antenna_heading_deg()
+{
+	return (_gps_pos.timestamp != 0 && PX4_ISFINITE(_gps_pos.heading))
+	       ? math::degrees(_gps_pos.heading)
+	       : NAN;
 }
 
 float Navigator::get_primary_accel_vibration_metric()
