@@ -46,6 +46,7 @@
 #include "navigator.h"
 
 #include <float.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #include <dataman_client/DatamanClient.hpp>
@@ -66,6 +67,10 @@ namespace navigator
 {
 Navigator *g_navigator;
 }
+
+static constexpr uint16_t MISSION_RETURN_DEBUG_ARRAY_ID = 0x4d52;
+static constexpr size_t MISSION_RETURN_DEBUG_ARRAY_USED_FIELDS = 13;
+static constexpr hrt_abstime MISSION_RETURN_DEBUG_UPDATE_INTERVAL = 1_s;
 
 Navigator::Navigator() :
 	ModuleParams(nullptr),
@@ -125,6 +130,92 @@ Navigator::~Navigator()
 	orb_unsubscribe(_local_pos_sub);
 	orb_unsubscribe(_mission_sub);
 	orb_unsubscribe(_vehicle_status_sub);
+}
+
+void Navigator::publish_mission_return_debug(bool valid)
+{
+	debug_array_s debug{};
+	debug.timestamp = hrt_absolute_time();
+	debug.id = MISSION_RETURN_DEBUG_ARRAY_ID;
+	strncpy(debug.name, "mis_rtrn", sizeof(debug.name) - 1);
+	debug.data[0] = valid ? 1.f : 0.f;
+	debug.data[1] = NAN;
+	debug.data[2] = NAN;
+	debug.data[3] = NAN;
+	debug.data[4] = NAN;
+	debug.data[5] = NAN;
+	debug.data[6] = NAN;
+
+	battery_status_s battery{};
+	debug.data[7] = (get_battery_for_debug(battery) && PX4_ISFINITE(battery.time_remaining_s))
+			 ? battery.time_remaining_s
+			 : NAN;
+	debug.data[8] = NAN;
+	debug.data[9] = NAN;
+	debug.data[10] = NAN;
+
+	vehicle_air_data_s air_data{};
+	debug.data[11] = (_vehicle_air_data_sub.copy(&air_data) && PX4_ISFINITE(air_data.baro_alt_meter))
+			 ? air_data.baro_alt_meter
+			 : NAN;
+	debug.data[12] = get_primary_accel_vibration_metric();
+
+	for (size_t i = MISSION_RETURN_DEBUG_ARRAY_USED_FIELDS; i < debug_array_s::ARRAY_SIZE; ++i) {
+		debug.data[i] = NAN;
+	}
+
+	_mission_return_debug_pub.publish(debug);
+	_last_mission_return_debug_pub = debug.timestamp;
+}
+
+void Navigator::update_mission_return_debug()
+{
+	if (hrt_elapsed_time(&_last_mission_return_debug_pub) >= MISSION_RETURN_DEBUG_UPDATE_INTERVAL) {
+		publish_mission_return_debug(true);
+	}
+}
+
+bool Navigator::get_battery_for_debug(battery_status_s &battery)
+{
+	bool found_battery{false};
+	uint8_t best_priority{UINT8_MAX};
+
+	for (auto &battery_sub : _battery_status_subs) {
+		battery_status_s candidate{};
+
+		if (!battery_sub.copy(&candidate) || !candidate.connected) {
+			continue;
+		}
+
+		if (!found_battery || candidate.priority < best_priority) {
+			battery = candidate;
+			best_priority = candidate.priority;
+			found_battery = true;
+		}
+	}
+
+	return found_battery;
+}
+
+float Navigator::get_primary_accel_vibration_metric()
+{
+	sensor_selection_s sensor_selection{};
+
+	if (!_sensor_selection_sub.copy(&sensor_selection) || (sensor_selection.accel_device_id == 0)) {
+		return NAN;
+	}
+
+	for (auto &imu_status_sub : _vehicle_imu_status_subs) {
+		vehicle_imu_status_s imu_status{};
+
+		if (imu_status_sub.copy(&imu_status)
+		    && (imu_status.accel_device_id == sensor_selection.accel_device_id)
+		    && PX4_ISFINITE(imu_status.accel_vibration_metric)) {
+			return imu_status.accel_vibration_metric;
+		}
+	}
+
+	return NAN;
 }
 
 void Navigator::params_update()
@@ -889,6 +980,8 @@ void Navigator::run()
 				_navigation_mode_array[i]->run(_navigation_mode == _navigation_mode_array[i]);
 			}
 		}
+
+		update_mission_return_debug();
 
 		/* if nothing is running, set position setpoint triplet invalid once */
 		if (_navigation_mode == nullptr && !_pos_sp_triplet_published_invalid_once) {
