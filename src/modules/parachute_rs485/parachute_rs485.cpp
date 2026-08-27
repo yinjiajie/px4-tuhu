@@ -48,6 +48,7 @@
 #include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
 
 #include <uORB/Publication.hpp>
+#include <uORB/PublicationMulti.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/topics/debug_array.h>
 #include <uORB/topics/parachute_status.h>
@@ -713,7 +714,7 @@ private:
 	const bool _invert;
 
 	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};
-	uORB::Publication<debug_array_s> _debug_array_pub{ORB_ID(debug_array)};
+	uORB::PublicationMulti<debug_array_s> _debug_array_pub{ORB_ID(debug_array)};
 	uORB::Publication<parachute_status_s> _parachute_status_pub{ORB_ID(parachute_status)};
 
 	vehicle_command_s _last_command {};

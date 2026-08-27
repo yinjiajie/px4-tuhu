@@ -62,6 +62,7 @@
 #include <px4_platform_common/module.h>
 #include <px4_platform_common/module_params.h>
 #include <uORB/Publication.hpp>
+#include <uORB/PublicationMulti.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionInterval.hpp>
 #include <uORB/SubscriptionMultiArray.hpp>
@@ -318,7 +319,7 @@ private:
 	uORB::SubscriptionMultiArray<vehicle_imu_status_s, MAX_VEHICLE_IMU_STATUS_INSTANCES> _vehicle_imu_status_subs{ORB_ID::vehicle_imu_status};
 
 	uORB::Publication<geofence_result_s>		_geofence_result_pub{ORB_ID(geofence_result)};
-	uORB::Publication<debug_array_s>		_mission_return_debug_pub{ORB_ID(debug_array)};
+	uORB::PublicationMulti<debug_array_s>		_mission_return_debug_pub{ORB_ID(debug_array)};
 	uORB::Publication<mission_result_s>		_mission_result_pub{ORB_ID(mission_result)};
 	uORB::Publication<position_setpoint_triplet_s>	_pos_sp_triplet_pub{ORB_ID(position_setpoint_triplet)};
 	uORB::Publication<vehicle_command_ack_s>	_vehicle_cmd_ack_pub{ORB_ID(vehicle_command_ack)};
