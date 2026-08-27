@@ -65,6 +65,8 @@ static constexpr px4::wq_config_t parachute_rs485_wq{"wq:parachute_rs485", 6000,
 static constexpr uint16_t kParachuteDebugArrayId{0x5053};
 static constexpr size_t kParachuteDebugArrayUsedFields{7};
 static constexpr float kParachuteVoltageReadyMinV{4.0f};
+static constexpr uint8_t kParachuteStateTriggered{5};
+static constexpr uint8_t kParachuteStateReleased{6};
 }
 
 class ParachuteRS485 : public ModuleBase<ParachuteRS485>, public px4::ScheduledWorkItem
@@ -435,6 +437,10 @@ private:
 	{
 		if (!status.connected) {
 			return DebugStatusCode::NotInstalled;
+		}
+
+		if ((status.state == kParachuteStateTriggered) || (status.state == kParachuteStateReleased)) {
+			return DebugStatusCode::Triggered;
 		}
 
 		const bool voltage_valid = PX4_ISFINITE(status.voltage_v) && (status.voltage_v >= kParachuteVoltageReadyMinV);
