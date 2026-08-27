@@ -220,36 +220,44 @@ void Navigator::get_magnetometer_headings_for_debug(float (&headings_deg)[2])
 		return;
 	}
 
-	size_t heading_index = 0;
-
-	for (auto &mag_sub : _vehicle_magnetometer_subs) {
-		vehicle_magnetometer_s magnetometer{};
-
-		if (!mag_sub.copy(&magnetometer) || (magnetometer.device_id == 0)) {
-			continue;
-		}
-
-		const float mx = magnetometer.magnetometer_ga[0];
-		const float my = magnetometer.magnetometer_ga[1];
-		const float mz = magnetometer.magnetometer_ga[2];
-
-		if (!PX4_ISFINITE(mx) || !PX4_ISFINITE(my) || !PX4_ISFINITE(mz)) {
-			continue;
-		}
-
-		const float xh = mx * cosf(pitch)
-				 + my * sinf(roll) * sinf(pitch)
-				 + mz * cosf(roll) * sinf(pitch);
-		const float yh = my * cosf(roll) - mz * sinf(roll);
-
-		if (PX4_ISFINITE(xh) && PX4_ISFINITE(yh)) {
-			headings_deg[heading_index++] = math::degrees(atan2f(-yh, xh));
-		}
-
-		if (heading_index >= 2) {
-			break;
-		}
+	for (uint8_t sensor_instance = 0; sensor_instance < DEBUG_MAGNETOMETER_COUNT; sensor_instance++) {
+		headings_deg[sensor_instance] = get_magnetometer_heading_for_debug(sensor_instance, roll, pitch);
 	}
+}
+
+float Navigator::get_magnetometer_heading_for_debug(uint8_t sensor_instance, float roll, float pitch)
+{
+	sensor_mag_s magnetometer{};
+
+	if (!_sensor_mag_subs[sensor_instance].copy(&magnetometer) || (magnetometer.device_id == 0)) {
+		return NAN;
+	}
+
+	auto &debug_mag_calibration = _debug_mag_calibration[sensor_instance];
+
+	if (debug_mag_calibration.device_id() != magnetometer.device_id) {
+		debug_mag_calibration.set_device_id(magnetometer.device_id);
+	}
+
+	debug_mag_calibration.SensorCorrectionsUpdate();
+
+	const matrix::Vector3f calibrated_magnetometer =
+		debug_mag_calibration.Correct(matrix::Vector3f{magnetometer.x, magnetometer.y, magnetometer.z});
+
+	const float mx = calibrated_magnetometer(0);
+	const float my = calibrated_magnetometer(1);
+	const float mz = calibrated_magnetometer(2);
+
+	if (!PX4_ISFINITE(mx) || !PX4_ISFINITE(my) || !PX4_ISFINITE(mz)) {
+		return NAN;
+	}
+
+	const float xh = mx * cosf(pitch)
+			 + my * sinf(roll) * sinf(pitch)
+			 + mz * cosf(roll) * sinf(pitch);
+	const float yh = my * cosf(roll) - mz * sinf(roll);
+
+	return (PX4_ISFINITE(xh) && PX4_ISFINITE(yh)) ? math::degrees(atan2f(-yh, xh)) : NAN;
 }
 
 float Navigator::get_dual_antenna_heading_deg()
@@ -294,6 +302,11 @@ void Navigator::params_update()
 
 	if (_handle_mpc_acc_hor != PARAM_INVALID) {
 		param_get(_handle_mpc_acc_hor, &_param_mpc_acc_hor);
+	}
+
+	for (auto &debug_mag_calibration : _debug_mag_calibration) {
+		debug_mag_calibration.ParametersUpdate();
+		debug_mag_calibration.SensorCorrectionsUpdate(true);
 	}
 
 	_mission.set_payload_deployment_timeout(_param_mis_payload_delivery_timeout.get());

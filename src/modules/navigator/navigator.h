@@ -59,6 +59,7 @@
 
 #include <lib/adsb/AdsbConflict.h>
 #include <lib/perf/perf_counter.h>
+#include <lib/sensor_calibration/Magnetometer.hpp>
 #include <px4_platform_common/module.h>
 #include <px4_platform_common/module_params.h>
 #include <uORB/Publication.hpp>
@@ -77,6 +78,7 @@
 #include <uORB/topics/position_controller_landing_status.h>
 #include <uORB/topics/position_controller_status.h>
 #include <uORB/topics/position_setpoint_triplet.h>
+#include <uORB/topics/sensor_mag.h>
 #include <uORB/topics/sensor_selection.h>
 #include <uORB/topics/transponder_report.h>
 #include <uORB/topics/vehicle_command.h>
@@ -85,7 +87,6 @@
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_imu_status.h>
-#include <uORB/topics/vehicle_magnetometer.h>
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/vehicle_land_detected.h>
 #include <uORB/topics/vehicle_local_position.h>
@@ -314,7 +315,8 @@ private:
 	uORB::Subscription _vehicle_attitude_sub{ORB_ID(vehicle_attitude)};
 	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};	/**< vehicle commands (onboard and offboard) */
 	uORB::SubscriptionMultiArray<battery_status_s, battery_status_s::MAX_INSTANCES> _battery_status_subs{ORB_ID::battery_status};
-	uORB::SubscriptionMultiArray<vehicle_magnetometer_s> _vehicle_magnetometer_subs{ORB_ID::vehicle_magnetometer};
+	static constexpr uint8_t DEBUG_MAGNETOMETER_COUNT{2};
+	uORB::SubscriptionMultiArray<sensor_mag_s, DEBUG_MAGNETOMETER_COUNT> _sensor_mag_subs{ORB_ID::sensor_mag};
 	static constexpr uint8_t MAX_VEHICLE_IMU_STATUS_INSTANCES{4};
 	uORB::SubscriptionMultiArray<vehicle_imu_status_s, MAX_VEHICLE_IMU_STATUS_INSTANCES> _vehicle_imu_status_subs{ORB_ID::vehicle_imu_status};
 
@@ -384,6 +386,7 @@ private:
 
 	float _cruising_speed_current_mode{-1.0f};
 	float _mission_throttle{NAN};
+	calibration::Magnetometer _debug_mag_calibration[DEBUG_MAGNETOMETER_COUNT] {};
 
 	traffic_buffer_s _traffic_buffer{};
 
@@ -407,6 +410,7 @@ private:
 	void publish_vehicle_command_ack(const vehicle_command_s &cmd, uint8_t result);
 	void update_mission_return_debug();
 	bool get_battery_for_debug(battery_status_s &battery);
+	float get_magnetometer_heading_for_debug(uint8_t sensor_instance, float roll, float pitch);
 	void get_magnetometer_headings_for_debug(float (&headings_deg)[2]);
 	float get_dual_antenna_heading_deg();
 	float get_primary_accel_vibration_metric();
