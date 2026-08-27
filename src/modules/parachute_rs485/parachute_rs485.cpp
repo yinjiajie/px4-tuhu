@@ -444,7 +444,7 @@ private:
 		}
 
 		const bool voltage_valid = PX4_ISFINITE(status.voltage_v) && (status.voltage_v >= kParachuteVoltageReadyMinV);
-		return voltage_valid ? DebugStatusCode::Ready : DebugStatusCode::Error;
+		return (voltage_valid && (status.state == 2)) ? DebugStatusCode::Ready : DebugStatusCode::Error;
 	}
 
 	void publish_debug_status(hrt_abstime now)
