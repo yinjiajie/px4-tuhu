@@ -2547,8 +2547,10 @@ void EKF2::UpdateSystemFlagsSample(ekf2_timestamps_s &ekf2_timestamps)
 		if (_status_sub.copy(&vehicle_status)
 		    && (ekf2_timestamps.timestamp < vehicle_status.timestamp + 3_s)) {
 
+			flags.armed = (vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED);
+
 			// initially set in_air from arming_state (will be overridden if land detector is available)
-			flags.in_air = (vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED);
+			flags.in_air = flags.armed;
 
 			// let the EKF know if the vehicle motion is that of a fixed wing (forward flight only relative to wind)
 			flags.is_fixed_wing = (vehicle_status.vehicle_type == vehicle_status_s::VEHICLE_TYPE_FIXED_WING);

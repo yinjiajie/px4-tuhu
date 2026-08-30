@@ -250,6 +250,7 @@ struct auxVelSample {
 struct systemFlagUpdate {
 	uint64_t time_us{};
 	bool at_rest{false};
+	bool armed{false};
 	bool in_air{true};
 	bool is_fixed_wing{false};
 	bool gnd_effect{false};

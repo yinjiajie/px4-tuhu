@@ -66,11 +66,13 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 			&& _control_status.flags.yaw_align
 			&& _NED_origin_initialised;
 	const bool starting_conditions_passing = continuing_conditions_passing && _gps_checks_passed;
-	const bool smooth_start_with_existing_horizontal_aiding = !_control_status.flags.gps
+	// When armed, if GPS starts while optical flow is already constraining horizontal drift,
+	// keep the existing local frame and let the GPS position innovation pull the state in gradually.
+	const bool skip_hpos_reset_on_gps_start = !_control_status.flags.gps
 			&& gnss_pos_enabled
 			&& starting_conditions_passing
-			&& isOtherSourceOfHorizontalAidingThan(_control_status.flags.gps)
-			&& _pos_ref.isInitialized()
+			&& _vehicle_armed
+			&& _control_status.flags.opt_flow
 			&& PX4_ISFINITE(_state.pos(0))
 			&& PX4_ISFINITE(_state.pos(1));
 
@@ -97,20 +99,9 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 				}
 			}
 
-		if (smooth_start_with_existing_horizontal_aiding) {
-			// Keep the current local frame continuous when GNSS starts after another local aiding source.
-			_pos_ref.initReference(gnss_sample.lat, gnss_sample.lon, gnss_sample.time_us);
-
-			double aligned_origin_lat = gnss_sample.lat;
-			double aligned_origin_lon = gnss_sample.lon;
-			_pos_ref.reproject(-_state.pos(0), -_state.pos(1), aligned_origin_lat, aligned_origin_lon);
-			_pos_ref.initReference(aligned_origin_lat, aligned_origin_lon, gnss_sample.time_us);
-			_gpos_origin_eph = gnss_sample.hacc;
-		}
-
-		if (_pos_ref.isInitialized()) {
-			updateGnssPos(gnss_sample, _aid_src_gnss_pos);
-		}
+			if (_pos_ref.isInitialized()) {
+				updateGnssPos(gnss_sample, _aid_src_gnss_pos);
+			}
 
 		updateGnssVel(gnss_sample, _aid_src_gnss_vel);
 
@@ -179,7 +170,7 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 					}
 				}
 
-				if (gnss_pos_enabled && !smooth_start_with_existing_horizontal_aiding) {
+				if (gnss_pos_enabled && !skip_hpos_reset_on_gps_start) {
 					resetHorizontalPositionToGnss(_aid_src_gnss_pos);
 				}
 
