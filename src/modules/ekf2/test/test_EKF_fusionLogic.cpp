@@ -210,45 +210,6 @@ TEST_F(EkfFusionLogicTest, fallbackFromGpsToFlow)
 	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
 }
 
-TEST_F(EkfFusionLogicTest, gpsToFlowTransitionLogsHorizontalPositionAndVelocityDeltas)
-{
-	ResetLoggingChecker reset_logging_checker(_ekf);
-
-	// GIVEN: GPS and flow setup with both aiding sources active
-	_ekf_wrapper.enableGpsFusion();
-	_sensor_simulator.startGps();
-
-	const float max_flow_rate = 5.f;
-	const float min_ground_distance = 0.f;
-	const float max_ground_distance = 50.f;
-	_ekf->set_optical_flow_limits(max_flow_rate, min_ground_distance, max_ground_distance);
-	_sensor_simulator.startFlow();
-	_sensor_simulator.startRangeFinder();
-	_ekf_wrapper.enableFlowFusion();
-
-	_ekf->set_in_air_status(true);
-	_sensor_simulator.runSeconds(15);
-
-	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsFusion());
-	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
-
-	reset_logging_checker.capturePreResetState();
-
-	// WHEN: GPS stops and optical flow becomes the only horizontal aiding source
-	_sensor_simulator.stopGps();
-	_sensor_simulator.runSeconds(11);
-
-	// THEN: flow remains active and the transition is logged through horizontal position and velocity resets
-	EXPECT_FALSE(_ekf_wrapper.isIntendingGpsFusion());
-	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
-
-	reset_logging_checker.capturePostResetState();
-	EXPECT_TRUE(reset_logging_checker.isHorizontalVelocityResetCounterIncreasedBy(1));
-	EXPECT_TRUE(reset_logging_checker.isHorizontalPositionResetCounterIncreasedBy(1));
-	EXPECT_TRUE(reset_logging_checker.isVelocityDeltaLoggedCorrectly(1e-2f));
-	EXPECT_TRUE(reset_logging_checker.isPositionDeltaLoggedCorrectly(1e-2f));
-}
-
 TEST_F(EkfFusionLogicTest, flowToGpsSmoothStartLogsHorizontalVelocityDelta)
 {
 	// GIVEN: optical flow aiding in a local frame that already has a global origin

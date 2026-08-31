@@ -488,12 +488,6 @@ void Ekf::stopGpsFusion()
 		_last_gps_pass_us = 0;
 
 		_control_status.flags.gps = false;
-
-#if defined(CONFIG_EKF2_OPTICAL_FLOW)
-		if (_control_status.flags.opt_flow && isOnlyActiveSourceOfHorizontalAiding(_control_status.flags.opt_flow)) {
-			resetFlowFusion(true);
-		}
-#endif // CONFIG_EKF2_OPTICAL_FLOW
 	}
 
 	stopGpsHgtFusion();
