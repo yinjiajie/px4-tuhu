@@ -59,23 +59,24 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 
 	// check for arrival of new sensor data at the fusion time horizon
 	_gps_data_ready = _gps_buffer->pop_first_older_than(imu_delayed.time_us, &_gps_sample_delayed);
-	const bool gnss_vel_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::VEL));
-	const bool gnss_pos_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::HPOS));
-	const bool continuing_conditions_passing = (gnss_vel_enabled || gnss_pos_enabled)
-			&& _control_status.flags.tilt_align
-			&& _control_status.flags.yaw_align
-			&& _NED_origin_initialised;
-	const bool starting_conditions_passing = continuing_conditions_passing && _gps_checks_passed;
-	const bool smooth_start_with_existing_horizontal_aiding = !_control_status.flags.gps
-			&& gnss_pos_enabled
-			&& starting_conditions_passing
-			&& isOtherSourceOfHorizontalAidingThan(_control_status.flags.gps)
-			&& _pos_ref.isInitialized()
-			&& PX4_ISFINITE(_state.pos(0))
-			&& PX4_ISFINITE(_state.pos(1));
 
 	if (_gps_data_ready) {
 		const gnssSample &gnss_sample = _gps_sample_delayed;
+
+		const bool gnss_vel_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::VEL));
+		const bool gnss_pos_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::HPOS));
+		const bool continuing_conditions_passing = (gnss_vel_enabled || gnss_pos_enabled)
+				&& _control_status.flags.tilt_align
+				&& _control_status.flags.yaw_align
+				&& _NED_origin_initialised;
+		const bool starting_conditions_passing = continuing_conditions_passing && _gps_checks_passed;
+		const bool smooth_start_with_existing_horizontal_aiding = !_control_status.flags.gps
+				&& gnss_pos_enabled
+				&& starting_conditions_passing
+				&& isOtherSourceOfHorizontalAidingThan(_control_status.flags.gps)
+				&& _pos_ref.isInitialized()
+				&& PX4_ISFINITE(_state.pos(0))
+				&& PX4_ISFINITE(_state.pos(1));
 
 		if (runGnssChecks(gnss_sample) && isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us / 2)) {
 			if (isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us)) {
