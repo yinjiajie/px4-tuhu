@@ -179,14 +179,11 @@ public:
 		_control_status.flags.vehicle_at_rest = at_rest;
 	}
 
-	void set_vehicle_armed(bool armed) { _vehicle_armed = armed; }
-
 	// return true if the attitude is usable
 	bool attitude_valid() const { return _control_status.flags.tilt_align; }
 
 	// get vehicle landed status data
 	bool get_in_air_status() const { return _control_status.flags.in_air; }
-	bool get_vehicle_armed() const { return _vehicle_armed; }
 
 	// get wind estimation status
 	bool get_wind_status() const { return _control_status.flags.wind; }
@@ -451,7 +448,6 @@ protected:
 #endif // CONFIG_EKF2_BAROMETER
 
 	uint64_t _time_last_gnd_effect_on{0};
-	bool _vehicle_armed{false};
 
 	fault_status_u _fault_status{};
 

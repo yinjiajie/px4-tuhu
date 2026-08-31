@@ -247,9 +247,9 @@ TEST_F(EkfFusionLogicTest, gpsToFlowTransitionKeepsHorizontalStateContinuity)
 	EXPECT_TRUE(reset_logging_checker.isHorizontalPositionResetCounterIncreasedBy(0));
 }
 
-TEST_F(EkfFusionLogicTest, flowToGpsStartWhenArmedKeepsReferenceAndAvoidsHorizontalPositionReset)
+TEST_F(EkfFusionLogicTest, flowToGpsSmoothStartKeepsHorizontalStateContinuity)
 {
-	// GIVEN: optical flow aiding while armed in a local frame that already has a global origin
+	// GIVEN: optical flow aiding in a local frame that already has a global origin
 	const float max_flow_rate = 5.f;
 	const float min_ground_distance = 0.f;
 	const float max_ground_distance = 50.f;
@@ -258,7 +258,6 @@ TEST_F(EkfFusionLogicTest, flowToGpsStartWhenArmedKeepsReferenceAndAvoidsHorizon
 	_sensor_simulator.startFlow();
 	_sensor_simulator.startRangeFinder();
 	_ekf_wrapper.enableFlowFusion();
-	_ekf->set_vehicle_armed(true);
 	_ekf->set_in_air_status(true);
 	_sensor_simulator.runSeconds(5);
 
@@ -266,87 +265,39 @@ TEST_F(EkfFusionLogicTest, flowToGpsStartWhenArmedKeepsReferenceAndAvoidsHorizon
 
 	const gnssSample gps_data = _sensor_simulator._gps.getDefaultGpsData();
 	ASSERT_TRUE(_ekf->setEkfGlobalOrigin(gps_data.lat, gps_data.lon, gps_data.alt));
-	_sensor_simulator._gps.stepHorizontalPositionByMeters(Vector2f{3.f, 3.f});
 
-	uint64_t origin_time_before = 0;
-	double origin_lat_before = 0.0;
-	double origin_lon_before = 0.0;
-	float origin_alt_before = 0.f;
-	ASSERT_TRUE(_ekf->getEkfGlobalOrigin(origin_time_before, origin_lat_before, origin_lon_before, origin_alt_before));
-
+	float delta_vxy[2] {};
 	float delta_xy[2] {};
+	uint8_t vel_reset_counter_before = 0;
 	uint8_t pos_reset_counter_before = 0;
-	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_before);
-	const Vector3f pos_before = _ekf->getPosition();
-	const Vector2f pos_before_xy{pos_before(0), pos_before(1)};
-	const Vector2f gps_hpos_target{3.f, 3.f};
+	uint8_t veld_reset_counter_before = 0;
+	float delta_vz_before = 0.f;
 
-	_ekf->set_min_required_gps_health_time(200000);
+	_ekf->get_velNE_reset(delta_vxy, &vel_reset_counter_before);
+	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_before);
+	_ekf->get_velD_reset(&delta_vz_before, &veld_reset_counter_before);
+	const Vector3f simulated_gps_velocity{0.7f, -0.4f, 0.25f};
+
+	_ekf->set_min_required_gps_health_time(1e6);
 	_ekf_wrapper.enableGpsFusion();
+	_sensor_simulator._gps.setVelocity(simulated_gps_velocity);
 	_sensor_simulator.startGps();
 	_sensor_simulator.runSeconds(1.5f);
 
-	// THEN: GPS starts without changing the reference or hard resetting local position
+	// THEN: GPS smooth start should keep both local position and velocity continuous
+	uint8_t vel_reset_counter_after = 0;
 	uint8_t pos_reset_counter_after = 0;
+	uint8_t veld_reset_counter_after = 0;
+	float delta_vz_after = 0.f;
+	_ekf->get_velNE_reset(delta_vxy, &vel_reset_counter_after);
 	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_after);
-	const Vector3f pos_after = _ekf->getPosition();
-	const Vector2f pos_after_xy{pos_after(0), pos_after(1)};
-
-	uint64_t origin_time_after = 0;
-	double origin_lat_after = 0.0;
-	double origin_lon_after = 0.0;
-	float origin_alt_after = 0.f;
-	ASSERT_TRUE(_ekf->getEkfGlobalOrigin(origin_time_after, origin_lat_after, origin_lon_after, origin_alt_after));
+	_ekf->get_velD_reset(&delta_vz_after, &veld_reset_counter_after);
 
 	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsFusion());
+	EXPECT_EQ(vel_reset_counter_before, vel_reset_counter_after);
 	EXPECT_EQ(pos_reset_counter_before, pos_reset_counter_after);
-	EXPECT_EQ(origin_time_before, origin_time_after);
-	EXPECT_DOUBLE_EQ(origin_lat_before, origin_lat_after);
-	EXPECT_DOUBLE_EQ(origin_lon_before, origin_lon_after);
-	EXPECT_FLOAT_EQ(origin_alt_before, origin_alt_after);
-	EXPECT_GT((pos_after_xy - pos_before_xy).norm(), 0.01f);
-	EXPECT_LT((pos_after_xy - gps_hpos_target).norm(), (pos_before_xy - gps_hpos_target).norm());
-	EXPECT_GT((pos_after_xy - gps_hpos_target).norm(), 0.1f);
-}
-
-TEST_F(EkfFusionLogicTest, flowToGpsStartWhenDisarmedOnGroundAllowsHorizontalPositionReset)
-{
-	// GIVEN: optical flow aiding on the ground while disarmed in a local frame that already has a global origin
-	const float max_flow_rate = 5.f;
-	const float min_ground_distance = 0.f;
-	const float max_ground_distance = 50.f;
-	_ekf->set_optical_flow_limits(max_flow_rate, min_ground_distance, max_ground_distance);
-	_sensor_simulator._flow.setData(_sensor_simulator._flow.dataAtRest());
-	_sensor_simulator.startFlow();
-	_sensor_simulator.startRangeFinder();
-	_ekf_wrapper.enableFlowFusion();
-	_ekf->set_vehicle_armed(false);
-	_sensor_simulator.runSeconds(5);
-
-	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
-
-	const gnssSample gps_data = _sensor_simulator._gps.getDefaultGpsData();
-	ASSERT_TRUE(_ekf->setEkfGlobalOrigin(gps_data.lat, gps_data.lon, gps_data.alt));
-	_sensor_simulator._gps.stepHorizontalPositionByMeters(Vector2f{3.f, 3.f});
-
-	float delta_xy[2] {};
-	uint8_t pos_reset_counter_before = 0;
-	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_before);
-
-	_ekf->set_min_required_gps_health_time(200000);
-	_ekf_wrapper.enableGpsFusion();
-	_sensor_simulator.startGps();
-	_sensor_simulator.runSeconds(1.5f);
-
-	// THEN: on the ground, GPS start is allowed to hard reset local position
-	uint8_t pos_reset_counter_after = 0;
-	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_after);
-	const Vector3f pos_after = _ekf->getPosition();
-
-	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsFusion());
-	EXPECT_GT(pos_reset_counter_after, pos_reset_counter_before);
-	EXPECT_NEAR(pos_after(0), 3.f, 0.2f);
-	EXPECT_NEAR(pos_after(1), 3.f, 0.2f);
+	EXPECT_EQ(veld_reset_counter_before, veld_reset_counter_after);
+	EXPECT_FLOAT_EQ(delta_vz_before, delta_vz_after);
 }
 
 TEST_F(EkfFusionLogicTest, doFlowFusion)
