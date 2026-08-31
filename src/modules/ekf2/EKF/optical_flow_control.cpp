@@ -138,21 +138,17 @@ void Ekf::controlOpticalFlowFusion(const imuSample &imu_delayed)
 void Ekf::startFlowFusion()
 {
 	ECL_INFO("starting optical flow fusion");
-	const bool flow_has_existing_local_frame = _control_status.flags.in_air
-					      && _pos_ref.isInitialized()
+	const bool flow_has_existing_local_frame = _pos_ref.isInitialized()
 					      && PX4_ISFINITE(_state.pos(0))
 					      && PX4_ISFINITE(_state.pos(1));
-	const bool smooth_start_with_existing_horizontal_state = flow_has_existing_local_frame
-			&& !isTimedOut(_time_last_hor_vel_fuse, _params.reset_timeout_max);
 
-	if (!_aid_src_optical_flow.innovation_rejected
-	    && (isHorizontalAidingActive() || smooth_start_with_existing_horizontal_state)) {
+	if (!_aid_src_optical_flow.innovation_rejected && isHorizontalAidingActive()) {
 		// Consistent with the current velocity state, simply fuse the data without reset
 		fuseOptFlow();
 		_control_status.flags.opt_flow = true;
 
 	} else if (!isHorizontalAidingActive()) {
-		resetFlowFusion();
+		resetFlowFusion(!_control_status.flags.in_air || flow_has_existing_local_frame);
 		_control_status.flags.opt_flow = true;
 
 	} else {
@@ -161,16 +157,15 @@ void Ekf::startFlowFusion()
 	}
 }
 
-void Ekf::resetFlowFusion()
+void Ekf::resetFlowFusion(bool reset_position)
 {
 	ECL_INFO("reset velocity to flow");
 	_information_events.flags.reset_vel_to_flow = true;
 	resetHorizontalVelocityTo(_flow_vel_ne, calcOptFlowMeasVar(_flow_sample_delayed));
 
-	// reset position, estimate is relative to initial position in this mode, so we start with zero error
-	if (!_control_status.flags.in_air) {
-		ECL_INFO("reset position to zero");
-		resetHorizontalPositionTo(Vector2f(0.f, 0.f), 0.f);
+	if (reset_position) {
+		ECL_INFO("reset position to flow local frame");
+		resetHorizontalPositionToOpticalFlow();
 	}
 
 	updateOptFlow(_aid_src_optical_flow);
@@ -178,6 +173,28 @@ void Ekf::resetFlowFusion()
 	_innov_check_fail_status.flags.reject_optflow_Y = false;
 
 	_aid_src_optical_flow.time_last_fuse = _time_delayed_us;
+}
+
+void Ekf::resetHorizontalPositionToOpticalFlow()
+{
+	if (_pos_ref.isInitialized() && PX4_ISFINITE(_state.pos(0)) && PX4_ISFINITE(_state.pos(1))) {
+		double current_lat = 0.0;
+		double current_lon = 0.0;
+		_pos_ref.reproject(_state.pos(0), _state.pos(1), current_lat, current_lon);
+
+		float current_gpos_eph = 0.f;
+		float current_gpos_epv_unused = 0.f;
+		get_ekf_gpos_accuracy(&current_gpos_eph, &current_gpos_epv_unused);
+		(void)current_gpos_epv_unused;
+
+		_pos_ref.initReference(current_lat, current_lon, _time_delayed_us);
+
+		if (PX4_ISFINITE(current_gpos_eph)) {
+			_gpos_origin_eph = current_gpos_eph;
+		}
+	}
+
+	resetHorizontalPositionTo(Vector2f(0.f, 0.f), 0.f);
 }
 
 void Ekf::stopFlowFusion()
