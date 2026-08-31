@@ -63,21 +63,6 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 	if (_gps_data_ready) {
 		const gnssSample &gnss_sample = _gps_sample_delayed;
 
-		const bool gnss_vel_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::VEL));
-		const bool gnss_pos_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::HPOS));
-		const bool continuing_conditions_passing = (gnss_vel_enabled || gnss_pos_enabled)
-				&& _control_status.flags.tilt_align
-				&& _control_status.flags.yaw_align
-				&& _NED_origin_initialised;
-		const bool starting_conditions_passing = continuing_conditions_passing && _gps_checks_passed;
-		const bool smooth_start_with_existing_horizontal_aiding = !_control_status.flags.gps
-				&& gnss_pos_enabled
-				&& starting_conditions_passing
-				&& isOtherSourceOfHorizontalAidingThan(_control_status.flags.gps)
-				&& _pos_ref.isInitialized()
-				&& PX4_ISFINITE(_state.pos(0))
-				&& PX4_ISFINITE(_state.pos(1));
-
 		if (runGnssChecks(gnss_sample) && isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us / 2)) {
 			if (isTimedOut(_last_gps_fail_us, (uint64_t)_min_gps_health_time_us)) {
 				// First time checks are passing, latching.
@@ -95,17 +80,6 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 				_warning_events.flags.gps_quality_poor = true;
 				ECL_WARN("GPS quality poor - stopping use");
 			}
-		}
-
-		if (smooth_start_with_existing_horizontal_aiding) {
-			// Keep the current local frame continuous when GNSS starts after another local aiding source.
-			_pos_ref.initReference(gnss_sample.lat, gnss_sample.lon, gnss_sample.time_us);
-
-			double aligned_origin_lat = gnss_sample.lat;
-			double aligned_origin_lon = gnss_sample.lon;
-			_pos_ref.reproject(-_state.pos(0), -_state.pos(1), aligned_origin_lat, aligned_origin_lon);
-			_pos_ref.initReference(aligned_origin_lat, aligned_origin_lon, gnss_sample.time_us);
-			_gpos_origin_eph = gnss_sample.hacc;
 		}
 
 		if (_pos_ref.isInitialized()) {
@@ -129,6 +103,15 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 #endif // CONFIG_EKF2_GNSS_YAW
 
 		controlGnssYawEstimator(_aid_src_gnss_vel);
+
+		const bool gnss_vel_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::VEL));
+		const bool gnss_pos_enabled = (_params.gnss_ctrl & static_cast<int32_t>(GnssCtrl::HPOS));
+
+		const bool continuing_conditions_passing = (gnss_vel_enabled || gnss_pos_enabled)
+				&& _control_status.flags.tilt_align
+				&& _control_status.flags.yaw_align
+				&& _NED_origin_initialised;
+		const bool starting_conditions_passing = continuing_conditions_passing && _gps_checks_passed;
 
 		if (_control_status.flags.gps) {
 			if (continuing_conditions_passing) {
@@ -181,7 +164,7 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 					}
 				}
 
-				if (gnss_pos_enabled && !smooth_start_with_existing_horizontal_aiding) {
+				if (gnss_pos_enabled) {
 					resetHorizontalPositionToGnss(_aid_src_gnss_pos);
 				}
 
