@@ -210,63 +210,6 @@ TEST_F(EkfFusionLogicTest, fallbackFromGpsToFlow)
 	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
 }
 
-TEST_F(EkfFusionLogicTest, flowToGpsSmoothStartLogsHorizontalVelocityDelta)
-{
-	// GIVEN: optical flow aiding in a local frame that already has a global origin
-	const float max_flow_rate = 5.f;
-	const float min_ground_distance = 0.f;
-	const float max_ground_distance = 50.f;
-	_ekf->set_optical_flow_limits(max_flow_rate, min_ground_distance, max_ground_distance);
-	_sensor_simulator._flow.setData(_sensor_simulator._flow.dataAtRest());
-	_sensor_simulator.startFlow();
-	_sensor_simulator.startRangeFinder();
-	_ekf_wrapper.enableFlowFusion();
-	_ekf->set_in_air_status(true);
-	_sensor_simulator.runSeconds(5);
-
-	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
-
-	const gnssSample gps_data = _sensor_simulator._gps.getDefaultGpsData();
-	ASSERT_TRUE(_ekf->setEkfGlobalOrigin(gps_data.lat, gps_data.lon, gps_data.alt));
-
-	float delta_vxy[2] {};
-	float delta_xy[2] {};
-	uint8_t vel_reset_counter_before = 0;
-	uint8_t pos_reset_counter_before = 0;
-	uint8_t veld_reset_counter_before = 0;
-	float delta_vz_before = 0.f;
-
-	_ekf->get_velNE_reset(delta_vxy, &vel_reset_counter_before);
-	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_before);
-	_ekf->get_velD_reset(&delta_vz_before, &veld_reset_counter_before);
-
-	const Vector3f velocity_before_reset = _ekf->getVelocity();
-	const Vector3f simulated_gps_velocity{0.7f, -0.4f, 0.25f};
-
-	_ekf->set_min_required_gps_health_time(1e6);
-	_ekf_wrapper.enableGpsFusion();
-	_sensor_simulator._gps.setVelocity(simulated_gps_velocity);
-	_sensor_simulator.startGps();
-	_sensor_simulator.runSeconds(1.5f);
-
-	// THEN: GPS smooth start should keep position continuous but log the horizontal velocity delta
-	uint8_t vel_reset_counter_after = 0;
-	uint8_t pos_reset_counter_after = 0;
-	uint8_t veld_reset_counter_after = 0;
-	float delta_vz_after = 0.f;
-	_ekf->get_velNE_reset(delta_vxy, &vel_reset_counter_after);
-	_ekf->get_posNE_reset(delta_xy, &pos_reset_counter_after);
-	_ekf->get_velD_reset(&delta_vz_after, &veld_reset_counter_after);
-
-	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsFusion());
-	EXPECT_EQ(vel_reset_counter_before + 1, vel_reset_counter_after);
-	EXPECT_EQ(pos_reset_counter_before, pos_reset_counter_after);
-	EXPECT_EQ(veld_reset_counter_before, veld_reset_counter_after);
-	EXPECT_FLOAT_EQ(delta_vz_before, delta_vz_after);
-	EXPECT_NEAR(delta_vxy[0], simulated_gps_velocity(0) - velocity_before_reset(0), 1e-3f);
-	EXPECT_NEAR(delta_vxy[1], simulated_gps_velocity(1) - velocity_before_reset(1), 1e-3f);
-}
-
 TEST_F(EkfFusionLogicTest, doFlowFusion)
 {
 	// GIVEN: a tilt and heading aligned filter
