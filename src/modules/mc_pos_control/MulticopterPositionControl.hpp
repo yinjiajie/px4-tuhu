@@ -206,7 +206,6 @@ private:
 		bool _offboard_setpoint_initialized{false};
 		hrt_abstime _offboard_position_takeover_time[3] {};
 		trajectory_setpoint_s _offboard_transition_reference_setpoint{PositionControl::empty_trajectory_setpoint};
-		matrix::Vector3f _offboard_position_reset_offset{}; ///< cumulative local position reset offset applied to incoming offboard NED position setpoints
 
 	/** Timeout in us for trajectory data to get considered invalid */
 	static constexpr uint64_t TRAJECTORY_STREAM_TIMEOUT_US = 500_ms;
@@ -249,17 +248,10 @@ private:
 	 * @brief adjust existing (or older) setpoint with any EKF reset deltas and update the local counters
 	 *
 	 * @param[in] vehicle_local_position struct containing EKF reset deltas and counters
-	 * @param[in] new_setpoint true when the current trajectory setpoint has just been updated this cycle
 	 * @param[out] setpoint trajectory setpoint struct to be adjusted
 	 */
 	void adjustSetpointForEKFResets(const vehicle_local_position_s &vehicle_local_position,
-					bool new_setpoint,
 					trajectory_setpoint_s &setpoint);
-
-	/**
-	 * Shift incoming offboard position setpoints into the current local frame after EKF position resets.
-	 */
-	void compensateOffboardPositionSetpoint(trajectory_setpoint_s &setpoint) const;
 
 	/**
 	 * Reject large offboard position or yaw setpoint jumps and hold the last accepted setpoint.

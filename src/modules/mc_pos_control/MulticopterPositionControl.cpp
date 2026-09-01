@@ -370,7 +370,6 @@ void MulticopterPositionControl::Run()
 
 				if (!previous_offboard_enabled && _vehicle_control_mode.flag_control_offboard_enabled) {
 					_offboard_transition_reference_setpoint = _setpoint;
-					_offboard_position_reset_offset.zero();
 
 					for (hrt_abstime &takeover_time : _offboard_position_takeover_time) {
 						takeover_time = _vehicle_control_mode.timestamp;
@@ -382,14 +381,13 @@ void MulticopterPositionControl::Run()
 					_last_valid_offboard_setpoint = PositionControl::empty_trajectory_setpoint;
 					_offboard_transition_reference_setpoint = PositionControl::empty_trajectory_setpoint;
 					_offboard_setpoint_initialized = false;
-					_offboard_position_reset_offset.zero();
 
 					for (hrt_abstime &takeover_time : _offboard_position_takeover_time) {
 						takeover_time = 0;
 					}
 				}
-				}
 			}
+		}
 
 		_vehicle_land_detected_sub.update(&_vehicle_land_detected);
 
@@ -413,7 +411,7 @@ void MulticopterPositionControl::Run()
 
 		const bool new_setpoint = _trajectory_setpoint_sub.update(&_setpoint);
 
-		adjustSetpointForEKFResets(vehicle_local_position, new_setpoint, _setpoint);
+		adjustSetpointForEKFResets(vehicle_local_position, _setpoint);
 		protectOffboardSetpoint(vehicle_local_position.timestamp_sample, states, new_setpoint, _setpoint);
 
 		if (_vehicle_control_mode.flag_multicopter_position_control_enabled) {
@@ -587,15 +585,6 @@ void MulticopterPositionControl::Run()
 	perf_end(_cycle_perf);
 }
 
-void MulticopterPositionControl::compensateOffboardPositionSetpoint(trajectory_setpoint_s &setpoint) const
-{
-	for (int axis = 0; axis < 3; axis++) {
-		if (PX4_ISFINITE(setpoint.position[axis])) {
-			setpoint.position[axis] += _offboard_position_reset_offset(axis);
-		}
-	}
-}
-
 void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now, const PositionControlStates &states,
 		bool new_setpoint, trajectory_setpoint_s &setpoint)
 {
@@ -612,12 +601,6 @@ void MulticopterPositionControl::protectOffboardSetpoint(const hrt_abstime &now,
 	float xy_jump = NAN;
 	float z_jump = NAN;
 	float yaw_jump = NAN;
-
-	if (new_setpoint) {
-		// Companion computers may keep streaming positions in the pre-reset local NED frame.
-		// Shift each newly received offboard position setpoint into the current local frame.
-		compensateOffboardPositionSetpoint(setpoint);
-	}
 
 	const auto reject_xy_to_last = [&]() {
 		setpoint.position[0] = _last_valid_offboard_setpoint.position[0];
@@ -971,7 +954,6 @@ trajectory_setpoint_s MulticopterPositionControl::generateFailsafeSetpoint(const
 }
 
 void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_position_s &vehicle_local_position,
-		bool new_setpoint,
 		trajectory_setpoint_s &setpoint)
 {
 	const bool setpoint_valid = (setpoint.timestamp != 0) && (setpoint.timestamp < vehicle_local_position.timestamp);
@@ -981,92 +963,75 @@ void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_
 	const bool last_raw_offboard_setpoint_valid = _offboard_setpoint_initialized
 			&& (_last_raw_offboard_setpoint.timestamp != 0)
 			&& (_last_raw_offboard_setpoint.timestamp < vehicle_local_position.timestamp);
-	const bool xy_reset = vehicle_local_position.xy_reset_counter != _xy_reset_counter;
-	const bool z_reset = vehicle_local_position.z_reset_counter != _z_reset_counter;
-	const bool vxy_reset = vehicle_local_position.vxy_reset_counter != _vxy_reset_counter;
-	const bool vz_reset = vehicle_local_position.vz_reset_counter != _vz_reset_counter;
-	const bool heading_reset = vehicle_local_position.heading_reset_counter != _heading_reset_counter;
-	const bool new_offboard_setpoint = new_setpoint && _vehicle_control_mode.flag_control_offboard_enabled;
-
-	if (_vehicle_control_mode.flag_control_offboard_enabled) {
-		if (xy_reset) {
-			_offboard_position_reset_offset(0) += vehicle_local_position.delta_xy[0];
-			_offboard_position_reset_offset(1) += vehicle_local_position.delta_xy[1];
-		}
-
-		if (z_reset) {
-			_offboard_position_reset_offset(2) += vehicle_local_position.delta_z;
-		}
-	}
 
 	if (setpoint_valid) {
-		if (vxy_reset) {
+		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
 			setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
 			setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
 		}
 
-		if (vz_reset) {
+		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
 			setpoint.velocity[2] += vehicle_local_position.delta_vz;
 		}
 
-		if (xy_reset && !new_offboard_setpoint) {
+		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
 			setpoint.position[0] += vehicle_local_position.delta_xy[0];
 			setpoint.position[1] += vehicle_local_position.delta_xy[1];
 		}
 
-		if (z_reset && !new_offboard_setpoint) {
+		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
 			setpoint.position[2] += vehicle_local_position.delta_z;
 		}
 
-		if (heading_reset) {
+		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
 			setpoint.yaw = wrap_pi(setpoint.yaw + vehicle_local_position.delta_heading);
 		}
 	}
 
 	if (last_offboard_setpoint_valid) {
-		if (vxy_reset) {
+		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
 			_last_valid_offboard_setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
 			_last_valid_offboard_setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
 		}
 
-		if (vz_reset) {
+		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
 			_last_valid_offboard_setpoint.velocity[2] += vehicle_local_position.delta_vz;
 		}
 
-		if (xy_reset) {
+		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
 			_last_valid_offboard_setpoint.position[0] += vehicle_local_position.delta_xy[0];
 			_last_valid_offboard_setpoint.position[1] += vehicle_local_position.delta_xy[1];
 		}
 
-		if (z_reset) {
+		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
 			_last_valid_offboard_setpoint.position[2] += vehicle_local_position.delta_z;
 		}
 
-		if (heading_reset) {
+		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
 			_last_valid_offboard_setpoint.yaw = wrap_pi(_last_valid_offboard_setpoint.yaw + vehicle_local_position.delta_heading);
 		}
 	}
 
 	if (last_raw_offboard_setpoint_valid) {
-		if (vxy_reset) {
+		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
 			_last_raw_offboard_setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
 			_last_raw_offboard_setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
 		}
 
-		if (vz_reset) {
+		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
 			_last_raw_offboard_setpoint.velocity[2] += vehicle_local_position.delta_vz;
 		}
 
-		if (xy_reset) {
+		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
 			_last_raw_offboard_setpoint.position[0] += vehicle_local_position.delta_xy[0];
 			_last_raw_offboard_setpoint.position[1] += vehicle_local_position.delta_xy[1];
 		}
 
-		if (z_reset) {
+		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
 			_last_raw_offboard_setpoint.position[2] += vehicle_local_position.delta_z;
 		}
 
-		if (heading_reset) {
+		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
 			_last_raw_offboard_setpoint.yaw = wrap_pi(_last_raw_offboard_setpoint.yaw + vehicle_local_position.delta_heading);
 		}
 	}
@@ -1075,36 +1040,36 @@ void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_
 			&& (_offboard_transition_reference_setpoint.timestamp < vehicle_local_position.timestamp);
 
 	if (offboard_transition_reference_valid) {
-		if (vxy_reset) {
+		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
 			_offboard_transition_reference_setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
 			_offboard_transition_reference_setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
 		}
 
-		if (vz_reset) {
+		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
 			_offboard_transition_reference_setpoint.velocity[2] += vehicle_local_position.delta_vz;
 		}
 
-		if (xy_reset) {
+		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
 			_offboard_transition_reference_setpoint.position[0] += vehicle_local_position.delta_xy[0];
 			_offboard_transition_reference_setpoint.position[1] += vehicle_local_position.delta_xy[1];
 		}
 
-		if (z_reset) {
+		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
 			_offboard_transition_reference_setpoint.position[2] += vehicle_local_position.delta_z;
 		}
 
-		if (heading_reset) {
+		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
 			_offboard_transition_reference_setpoint.yaw = wrap_pi(_offboard_transition_reference_setpoint.yaw
 					+ vehicle_local_position.delta_heading);
 		}
 	}
 
-	if (vxy_reset) {
+	if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
 		_vel_x_deriv.reset();
 		_vel_y_deriv.reset();
 	}
 
-	if (vz_reset) {
+	if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
 		_vel_z_deriv.reset();
 	}
 
