@@ -152,15 +152,15 @@ TEST_F(EkfGpsTest, resetToGpsVelocity)
 	EXPECT_TRUE(reset_logging_checker.isVelocityDeltaLoggedCorrectly(1e-2f));
 }
 
-TEST_F(EkfGpsTest, resetToGpsPosition)
+TEST_F(EkfGpsTest, restartGpsFusionDoesNotResetPosition)
 {
-	// GIVEN:EKF that fuses GPS
-	// and has gps checks already passed
-	const Vector3f previous_position = _ekf->getPosition();
+	ResetLoggingChecker reset_logging_checker(_ekf);
 
 	// WHEN: stopping GPS fusion
 	_sensor_simulator.stopGps();
 	_sensor_simulator.runSeconds(11);
+
+	reset_logging_checker.capturePreResetState();
 
 	// AND: simulate jump in position
 	_sensor_simulator.startGps();
@@ -169,10 +169,42 @@ TEST_F(EkfGpsTest, resetToGpsPosition)
 		Vector2f(simulated_position_change));
 	_sensor_simulator.runSeconds(6);
 
-	// THEN: a reset to the new GPS position should be done
-	const Vector3f estimated_position = _ekf->getPosition();
-	EXPECT_TRUE(isEqual(estimated_position,
-			    previous_position + simulated_position_change, 1e-2f));
+	// THEN: GPS fusion should restart without a horizontal position reset
+	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsFusion());
+
+	reset_logging_checker.capturePostResetState();
+	EXPECT_TRUE(reset_logging_checker.isHorizontalPositionResetCounterIncreasedBy(0));
+}
+
+TEST_F(EkfGpsTest, restartGpsHeightFusionDoesNotResetHeight)
+{
+	ResetLoggingChecker reset_logging_checker(_ekf);
+
+	_ekf_wrapper.setGpsHeightRef();
+	_ekf_wrapper.enableGpsHeightFusion();
+	_sensor_simulator.runSeconds(3);
+
+	ASSERT_TRUE(_ekf_wrapper.isIntendingGpsHeightFusion());
+	ASSERT_EQ(_ekf->getHeightSensorRef(), HeightSensor::GNSS);
+
+	_sensor_simulator.stopGps();
+	_sensor_simulator.runSeconds(11);
+
+	ASSERT_FALSE(_ekf_wrapper.isIntendingGpsHeightFusion());
+
+	reset_logging_checker.capturePreResetState();
+	const float estimated_height_before_restart = _ekf->getPosition()(2);
+
+	_sensor_simulator.startGps();
+	_sensor_simulator._gps.stepHeightByMeters(3.f);
+	_sensor_simulator.runSeconds(6);
+
+	EXPECT_TRUE(_ekf_wrapper.isIntendingGpsHeightFusion());
+	EXPECT_EQ(_ekf->getHeightSensorRef(), HeightSensor::GNSS);
+
+	reset_logging_checker.capturePostResetState();
+	EXPECT_TRUE(reset_logging_checker.isVerticalPositionResetCounterIncreasedBy(0));
+	EXPECT_NEAR(_ekf->getPosition()(2), estimated_height_before_restart, 0.5f);
 }
 
 TEST_F(EkfGpsTest, gpsHgtToBaroFallback)

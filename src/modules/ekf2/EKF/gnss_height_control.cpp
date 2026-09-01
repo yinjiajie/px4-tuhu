@@ -168,24 +168,36 @@ void Ekf::controlGnssHeightFusion(const gnssSample &gps_sample)
 
 		} else {
 			if (starting_conditions_passing) {
-					const bool start_with_pre_takeoff_rtk_realign =
-						(_params.height_sensor_ref == static_cast<int32_t>(HeightSensor::GNSS))
+				const bool gnss_is_height_reference =
+					_params.height_sensor_ref == static_cast<int32_t>(HeightSensor::GNSS);
+				const bool first_gnss_height_reference_start = gnss_is_height_reference && !_gps_hgt_was_ref;
+				const bool start_with_pre_takeoff_rtk_realign = first_gnss_height_reference_start
 						&& pre_takeoff_at_rest
-					&& gps_is_rtk_fixed;
+						&& gps_is_rtk_fixed;
 
 				if (start_with_pre_takeoff_rtk_realign && realign_gnss_height_origin(gnss_alt)) {
 					ECL_INFO("starting %s height fusion, realigning origin", HGT_SRC_NAME);
 					_height_sensor_ref = HeightSensor::GNSS;
 					bias_est.reset();
+					_gps_hgt_was_ref = true;
 
-				} else if (_params.height_sensor_ref == static_cast<int32_t>(HeightSensor::GNSS)) {
-					ECL_INFO("starting %s height fusion, resetting height", HGT_SRC_NAME);
+				} else if (gnss_is_height_reference) {
 					_height_sensor_ref = HeightSensor::GNSS;
 
-					_information_events.flags.reset_hgt_to_gps = true;
-					resetVerticalPositionTo(-measurement, measurement_var);
-					_gpos_origin_epv = 0.f; // The uncertainty of the global origin is now contained in the local position uncertainty
-					bias_est.reset();
+					if (first_gnss_height_reference_start) {
+						ECL_INFO("starting %s height fusion, resetting height", HGT_SRC_NAME);
+
+						_information_events.flags.reset_hgt_to_gps = true;
+						resetVerticalPositionTo(-measurement, measurement_var);
+						_gpos_origin_epv = 0.f; // The uncertainty of the global origin is now contained in the local position uncertainty
+						bias_est.reset();
+
+					} else {
+						ECL_INFO("starting %s height fusion, preserving local height", HGT_SRC_NAME);
+						bias_est.setBias(_state.pos(2) + measurement);
+					}
+
+					_gps_hgt_was_ref = true;
 
 				} else {
 					ECL_INFO("starting %s height fusion", HGT_SRC_NAME);

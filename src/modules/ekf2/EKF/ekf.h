@@ -668,6 +668,8 @@ private:
 	uint64_t _last_gps_pass_us{0};		///< last system time in usec that the GPS passed it's checks
 	uint32_t _min_gps_health_time_us{10000000}; ///< GPS is marked as healthy only after this amount of time
 	bool _gps_checks_passed{false};		///> true when all active GPS checks have passed
+	bool _gps_hpos_was_fused{false};	///< true after GNSS horizontal position fusion has started once since the last EKF reset
+	bool _gps_hgt_was_ref{false};		///< true after GNSS height fusion has started once as the primary height reference since the last EKF reset
 	uint8_t _gps_prev_fix_type{0};		///< previous GNSS fix type, used to detect entry into RTK fixed
 
 	gps_check_fail_status_u _gps_check_fail_status{};

@@ -164,11 +164,13 @@ void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 					}
 				}
 
-				if (gnss_pos_enabled) {
+				// Preserve the local position estimate across GNSS stop/start cycles after the initial alignment.
+				if (gnss_pos_enabled && !_gps_hpos_was_fused) {
 					resetHorizontalPositionToGnss(_aid_src_gnss_pos);
 				}
 
 				_control_status.flags.gps = true;
+				_gps_hpos_was_fused |= gnss_pos_enabled;
 			}
 		}
 	}
