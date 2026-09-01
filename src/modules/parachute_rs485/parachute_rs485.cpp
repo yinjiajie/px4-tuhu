@@ -64,7 +64,6 @@ namespace
 static constexpr px4::wq_config_t parachute_rs485_wq{"wq:parachute_rs485", 6000, -18};
 static constexpr uint16_t kParachuteDebugArrayId{0x5053};
 static constexpr size_t kParachuteDebugArrayUsedFields{7};
-static constexpr float kParachuteVoltageReadyMinV{4.0f};
 static constexpr uint8_t kParachuteStateTriggered{5};
 static constexpr uint8_t kParachuteStateReleased{6};
 }
@@ -443,8 +442,7 @@ private:
 			return DebugStatusCode::Triggered;
 		}
 
-		const bool voltage_valid = PX4_ISFINITE(status.voltage_v) && (status.voltage_v >= kParachuteVoltageReadyMinV);
-		return (voltage_valid && (status.state == 2)) ? DebugStatusCode::Ready : DebugStatusCode::Error;
+		return (status.state == 2) ? DebugStatusCode::Ready : DebugStatusCode::Error;
 	}
 
 	void publish_debug_status(hrt_abstime now)
