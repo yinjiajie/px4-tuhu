@@ -76,6 +76,7 @@
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/sensor_combined.h>
 #include <uORB/topics/sensor_selection.h>
+#include <uORB/topics/input_rc.h>
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_global_position.h>
@@ -212,6 +213,7 @@ private:
 	 * Calculate filtered WGS84 height from estimated AMSL height
 	 */
 	float filter_altitude_ellipsoid(float amsl_hgt);
+	void applyGnssYawTestInput(sensor_gps_s &vehicle_gps_position);
 
 	void PublishGpsStatus(const hrt_abstime &timestamp);
 	void PublishGnssHgtBias(const hrt_abstime &timestamp);
@@ -456,6 +458,13 @@ private:
 #endif // CONFIG_EKF2_WIND
 
 #if defined(CONFIG_EKF2_GNSS)
+	enum class GnssYawTestMode : uint8_t {
+		Disabled = 0,
+		HeadingNan,
+		HeadingPlus30Deg,
+		HeadingPlus60Deg
+	};
+
 	uint64_t _gps_time_usec {0};
 	int32_t _gps_alttitude_ellipsoid{0};			///< altitude in 1E-3 meters (millimeters) above ellipsoid
 	uint64_t _gps_alttitude_ellipsoid_previous_timestamp{0}; ///< storage for previous timestamp to compute dt
@@ -470,6 +479,9 @@ private:
 	float _last_gnss_hgt_bias_published{};
 
 	uORB::Subscription _vehicle_gps_position_sub{ORB_ID(vehicle_gps_position)};
+	uORB::Subscription _input_rc_sub{ORB_ID(input_rc)};
+
+	GnssYawTestMode _gnss_yaw_test_mode{GnssYawTestMode::Disabled};
 
 	uORB::PublicationMulti<estimator_bias_s> _estimator_gnss_hgt_bias_pub{ORB_ID(estimator_gnss_hgt_bias)};
 	uORB::PublicationMulti<estimator_gps_status_s> _estimator_gps_status_pub{ORB_ID(estimator_gps_status)};

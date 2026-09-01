@@ -2389,12 +2389,92 @@ bool EKF2::UpdateFlowSample(ekf2_timestamps_s &ekf2_timestamps)
 #endif // CONFIG_EKF2_OPTICAL_FLOW
 
 #if defined(CONFIG_EKF2_GNSS)
+void EKF2::applyGnssYawTestInput(sensor_gps_s &vehicle_gps_position)
+{
+	static constexpr uint8_t gnss_yaw_test_channel = 7; // RC channel 8, zero-based index
+
+	const auto mode_name = [](GnssYawTestMode mode) {
+		switch (mode) {
+		case GnssYawTestMode::Disabled:
+			return "normal";
+
+		case GnssYawTestMode::HeadingNan:
+			return "heading_nan";
+
+		case GnssYawTestMode::HeadingPlus30Deg:
+			return "heading_plus_30deg";
+
+		case GnssYawTestMode::HeadingPlus60Deg:
+			return "heading_plus_60deg";
+		}
+
+		return "unknown";
+	};
+
+	input_rc_s input_rc{};
+	GnssYawTestMode mode = GnssYawTestMode::Disabled;
+	uint16_t channel_8_value = 0;
+
+	if (_input_rc_sub.copy(&input_rc)
+	    && (input_rc.timestamp_last_signal != 0)
+	    && ((hrt_absolute_time() - input_rc.timestamp_last_signal) < 1_s)
+	    && !input_rc.rc_lost
+	    && !input_rc.rc_failsafe
+	    && (input_rc.channel_count > gnss_yaw_test_channel)) {
+		channel_8_value = input_rc.values[gnss_yaw_test_channel];
+
+		if ((channel_8_value > 800) && (channel_8_value != UINT16_MAX)) {
+			if (channel_8_value < 1250) {
+				mode = GnssYawTestMode::Disabled;
+
+			} else if (channel_8_value < 1500) {
+				mode = GnssYawTestMode::HeadingNan;
+
+			} else if (channel_8_value < 1750) {
+				mode = GnssYawTestMode::HeadingPlus30Deg;
+
+			} else {
+				mode = GnssYawTestMode::HeadingPlus60Deg;
+			}
+		}
+	}
+
+	if (mode != _gnss_yaw_test_mode) {
+		PX4_INFO("GNSS yaw test: RC8=%u -> %s", channel_8_value, mode_name(mode));
+		_gnss_yaw_test_mode = mode;
+	}
+
+	switch (_gnss_yaw_test_mode) {
+	case GnssYawTestMode::Disabled:
+		break;
+
+	case GnssYawTestMode::HeadingNan:
+		vehicle_gps_position.heading = NAN;
+		break;
+
+	case GnssYawTestMode::HeadingPlus30Deg:
+		if (PX4_ISFINITE(vehicle_gps_position.heading)) {
+			vehicle_gps_position.heading = wrap_pi(vehicle_gps_position.heading + math::radians(30.f));
+		}
+
+		break;
+
+	case GnssYawTestMode::HeadingPlus60Deg:
+		if (PX4_ISFINITE(vehicle_gps_position.heading)) {
+			vehicle_gps_position.heading = wrap_pi(vehicle_gps_position.heading + math::radians(60.f));
+		}
+
+		break;
+	}
+}
+
 void EKF2::UpdateGpsSample(ekf2_timestamps_s &ekf2_timestamps)
 {
 	// EKF GPS message
 	sensor_gps_s vehicle_gps_position;
 
 	if (_vehicle_gps_position_sub.update(&vehicle_gps_position)) {
+		applyGnssYawTestInput(vehicle_gps_position);
 
 		Vector3f vel_ned;
 
