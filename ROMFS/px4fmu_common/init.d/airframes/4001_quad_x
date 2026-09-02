@@ -192,3 +192,5 @@ param set CAL_MAG1_PRIO 75
 param set CAL_MAG1_ROT 0
 
 param set EKF2_EV_CTRL 1
+
+param set EKF2_REQ_GPS_H 2
