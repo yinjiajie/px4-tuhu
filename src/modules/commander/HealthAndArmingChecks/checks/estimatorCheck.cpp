@@ -35,6 +35,16 @@
 
 using namespace time_literals;
 
+namespace
+{
+
+constexpr int32_t kEkf2GpsCtrlYaw = 1 << 3;
+constexpr float kPreflightGnssYawAccuracyGate = math::radians(5.f);
+constexpr float kPreflightGnssYawConsistencyGate = math::radians(10.f);
+constexpr hrt_abstime kPreflightGnssYawMinContinuousTime = 1_s;
+
+} // namespace
+
 EstimatorChecks::EstimatorChecks()
 {
 	// initially set to failed
@@ -93,6 +103,7 @@ void EstimatorChecks::checkAndReport(const Context &context, Report &reporter)
 
 			checkEstimatorStatus(context, reporter, estimator_status, required_groups);
 			checkEstimatorStatusFlags(context, reporter, estimator_status, lpos);
+			checkPreflightGnssYawConsistency(context, reporter, lpos, vehicle_gps_position, required_groups);
 
 		} else {
 			missing_data = true;
@@ -185,6 +196,7 @@ void EstimatorChecks::checkEstimatorStatus(const Context &context, Report &repor
 		if (reporter.mavlink_log_pub()) {
 			mavlink_log_critical(reporter.mavlink_log_pub(), "Preflight Fail: compass heading inconsistent");
 		}
+
 	}
 
 
@@ -676,6 +688,57 @@ void EstimatorChecks::checkEstimatorStatusFlags(const Context &context, Report &
 					}
 				}
 			}
+		}
+	}
+}
+
+void EstimatorChecks::checkPreflightGnssYawConsistency(const Context &context, Report &reporter,
+		const vehicle_local_position_s &lpos, const sensor_gps_s &vehicle_gps_position,
+		NavModes required_groups)
+{
+	if (context.isArmed() || !(_param_ekf2_gps_ctrl.get() & kEkf2GpsCtrlYaw)) {
+		_preflt_gnss_yaw_pass_start_time = 0;
+		return;
+	}
+
+	const hrt_abstime now = hrt_absolute_time();
+	const bool gnss_yaw_recent = (vehicle_gps_position.timestamp != 0)
+				     && (now < vehicle_gps_position.timestamp + 1_s);
+	const bool gnss_yaw_valid = gnss_yaw_recent
+				    && PX4_ISFINITE(vehicle_gps_position.heading)
+				    && PX4_ISFINITE(vehicle_gps_position.heading_accuracy);
+	const bool gnss_yaw_accurate = gnss_yaw_valid
+				       && (vehicle_gps_position.heading_accuracy <= kPreflightGnssYawAccuracyGate);
+	const bool ekf_heading_valid = PX4_ISFINITE(lpos.heading) && lpos.heading_good_for_control;
+	const bool heading_agreement_valid = gnss_yaw_accurate
+					     && ekf_heading_valid
+					     && (fabsf(wrap_pi(vehicle_gps_position.heading - lpos.heading))
+						 < kPreflightGnssYawConsistencyGate);
+
+	bool preflight_gnss_yaw_consistent = false;
+
+	if (heading_agreement_valid) {
+		if (_preflt_gnss_yaw_pass_start_time == 0) {
+			_preflt_gnss_yaw_pass_start_time = now;
+		}
+
+		preflight_gnss_yaw_consistent = (now - _preflt_gnss_yaw_pass_start_time) >= kPreflightGnssYawMinContinuousTime;
+
+	} else {
+		_preflt_gnss_yaw_pass_start_time = 0;
+	}
+
+	if (!preflight_gnss_yaw_consistent) {
+		/* EVENT
+		 * @description
+		 * When GNSS yaw is enabled, raw dual-antenna heading must be available, accurate, and stay within 10 degrees of the current heading before takeoff.
+		 */
+		reporter.armingCheckFailure(required_groups, health_component_t::local_position_estimate,
+					    events::ID("check_estimator_gnss_heading_inconsistent"),
+					    events::Log::Error, "GNSS heading inconsistent");
+
+		if (reporter.mavlink_log_pub()) {
+			mavlink_log_critical(reporter.mavlink_log_pub(), "Preflight Fail: GNSS heading inconsistent");
 		}
 	}
 }

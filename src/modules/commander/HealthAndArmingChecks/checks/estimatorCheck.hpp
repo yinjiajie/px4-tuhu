@@ -64,6 +64,10 @@ private:
 	void checkSensorBias(const Context &context, Report &reporter, NavModes required_groups);
 	void checkEstimatorStatusFlags(const Context &context, Report &reporter, const estimator_status_s &estimator_status,
 				       const vehicle_local_position_s &lpos);
+	void checkPreflightGnssYawConsistency(const Context &context, Report &reporter,
+					       const vehicle_local_position_s &lpos,
+					       const sensor_gps_s &vehicle_gps_position,
+					       NavModes required_groups);
 
 	void checkGps(const Context &context, Report &reporter, const sensor_gps_s &vehicle_gps_position) const;
 	void lowPositionAccuracy(const Context &context, Report &reporter, const vehicle_local_position_s &lpos) const;
@@ -92,6 +96,7 @@ private:
 	hrt_abstime	_last_lpos_fail_time_us{0};	///< Last time that the local position validity recovery check failed (usec)
 	hrt_abstime	_last_lpos_relaxed_fail_time_us{0};	///< Last time that the relaxed local position validity recovery check failed (usec)
 	hrt_abstime	_last_lvel_fail_time_us{0};	///< Last time that the local velocity validity recovery check failed (usec)
+	hrt_abstime	_preflt_gnss_yaw_pass_start_time{0}; ///< First time the raw GNSS yaw agreed with the EKF heading before arming
 
 	// variables used to check for navigation failure after takeoff
 	hrt_abstime	_time_last_innov_pass{0};	///< last time velocity and position innovations passed
@@ -113,6 +118,7 @@ private:
 					(ParamFloat<px4::params::COM_ARM_EKF_POS>) _param_com_arm_ekf_pos,
 					(ParamFloat<px4::params::COM_ARM_EKF_YAW>) _param_com_arm_ekf_yaw,
 					(ParamBool<px4::params::COM_ARM_WO_GPS>) _param_com_arm_wo_gps,
+					(ParamExtInt<px4::params::EKF2_GPS_CTRL>) _param_ekf2_gps_ctrl,
 					(ParamBool<px4::params::SYS_HAS_GPS>) _param_sys_has_gps,
 					(ParamFloat<px4::params::COM_POS_FS_EPH>) _param_com_pos_fs_eph,
 					(ParamFloat<px4::params::COM_VEL_FS_EVH>) _param_com_vel_fs_evh,
