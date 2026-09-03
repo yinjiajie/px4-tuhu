@@ -685,6 +685,7 @@ private:
 # if defined(CONFIG_EKF2_GNSS_YAW)
 	estimator_aid_source1d_s _aid_src_gnss_yaw{};
 	uint8_t _nb_gps_yaw_reset_available{0}; ///< remaining number of resets allowed before switching to another aiding source
+	uint64_t _gps_yaw_start_conditions_pass_us{0}; ///< delayed time when GNSS yaw start conditions first became continuously valid
 # endif // CONFIG_EKF2_GNSS_YAW
 #endif // CONFIG_EKF2_GNSS
 

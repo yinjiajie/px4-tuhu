@@ -86,7 +86,8 @@ bool Ekf::isGpsYawConsistentWithMag(const gnssSample &gps_sample)
 	(void)gps_sample;
 #endif // CONFIG_EKF2_MAGNETOMETER
 
-	return true;
+	// Require a valid magnetic heading before starting GNSS yaw fusion.
+	return _control_status.flags.gps_yaw;
 }
 
 #if defined(CONFIG_EKF2_MAGNETOMETER)

@@ -39,6 +39,13 @@
 #include "ekf.h"
 #include <mathlib/mathlib.h>
 
+namespace
+{
+
+constexpr hrt_abstime kGnssYawStartMinContinuousTime = 1'000'000;
+
+} // namespace
+
 void Ekf::controlGpsFusion(const imuSample &imu_delayed)
 {
 	if (!_gps_buffer || (_params.gnss_ctrl == 0)) {
@@ -349,6 +356,7 @@ void Ekf::controlGpsYawFusion(const gnssSample &gps_sample)
 
 	if (is_new_data_available) {
 		if (!is_gps_yaw_measurement_accurate) {
+			_gps_yaw_start_conditions_pass_us = 0;
 			stopGpsYawFusion();
 			return;
 		}
@@ -372,6 +380,7 @@ void Ekf::controlGpsYawFusion(const gnssSample &gps_sample)
 				&& is_gps_yaw_consistent_with_mag;
 
 		if (_control_status.flags.gps_yaw) {
+			_gps_yaw_start_conditions_pass_us = 0;
 
 			if (continuing_conditions_passing) {
 
@@ -410,29 +419,45 @@ void Ekf::controlGpsYawFusion(const gnssSample &gps_sample)
 
 		} else {
 			if (starting_conditions_passing) {
-				// Try to activate GPS yaw fusion
-				if (resetYawToGps(gps_sample.yaw, gps_sample.yaw_offset, gps_sample.yaw_acc)) {
-					ECL_INFO("starting GPS yaw fusion");
-
-					_aid_src_gnss_yaw.time_last_fuse = _time_delayed_us;
-					_control_status.flags.gps_yaw = true;
-					_control_status.flags.yaw_align = true;
-
-					_nb_gps_yaw_reset_available = 1;
+				if (_gps_yaw_start_conditions_pass_us == 0) {
+					_gps_yaw_start_conditions_pass_us = _time_delayed_us;
 				}
+
+				if ((_time_delayed_us - _gps_yaw_start_conditions_pass_us) >= kGnssYawStartMinContinuousTime) {
+					// Try to activate GPS yaw fusion after the start conditions remained stable.
+					if (resetYawToGps(gps_sample.yaw, gps_sample.yaw_offset, gps_sample.yaw_acc)) {
+						ECL_INFO("starting GPS yaw fusion");
+
+						_aid_src_gnss_yaw.time_last_fuse = _time_delayed_us;
+						_control_status.flags.gps_yaw = true;
+						_control_status.flags.yaw_align = true;
+
+						_nb_gps_yaw_reset_available = 1;
+						_gps_yaw_start_conditions_pass_us = 0;
+					}
+				}
+
+			} else {
+				_gps_yaw_start_conditions_pass_us = 0;
 			}
 		}
 
-	} else if (_control_status.flags.gps_yaw
-		   && !isNewestSampleRecent(_time_last_gps_yaw_buffer_push, _params.reset_timeout_max)) {
+	} else {
+		_gps_yaw_start_conditions_pass_us = 0;
 
-		// No yaw data in the message anymore. Stop until it comes back.
-		stopGpsYawFusion();
+		if (_control_status.flags.gps_yaw
+		    && !isNewestSampleRecent(_time_last_gps_yaw_buffer_push, _params.reset_timeout_max)) {
+
+			// No yaw data in the message anymore. Stop until it comes back.
+			stopGpsYawFusion();
+		}
 	}
 }
 
 void Ekf::stopGpsYawFusion()
 {
+	_gps_yaw_start_conditions_pass_us = 0;
+
 	if (_control_status.flags.gps_yaw) {
 
 		_control_status.flags.gps_yaw = false;
