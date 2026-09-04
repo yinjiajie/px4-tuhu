@@ -228,6 +228,26 @@ TEST_F(EkfFlowTest, inAirConvergence)
 			<< estimated_velocity(1);
 }
 
+TEST_F(EkfFlowTest, invalidRangeDataDoesNotReenableFlowFusionAboveHeightLimit)
+{
+	startRangeFinderFusion(1.f);
+	startZeroFlowFusion();
+
+	_ekf->set_in_air_status(true);
+	_ekf->set_vehicle_at_rest(false);
+
+	_sensor_simulator.runSeconds(5.f);
+	EXPECT_TRUE(_ekf_wrapper.isIntendingFlowFusion());
+
+	_sensor_simulator._rng.setData(6.f, 100);
+	_sensor_simulator.runSeconds(2.f);
+	EXPECT_FALSE(_ekf_wrapper.isIntendingFlowFusion());
+
+	_sensor_simulator._rng.setData(0.f, -1);
+	_sensor_simulator.runSeconds(7.1f);
+	EXPECT_FALSE(_ekf_wrapper.isIntendingFlowFusion());
+}
+
 TEST_F(EkfFlowTest, yawMotionCorrectionWithAutopilotGyroData)
 {
 	// WHEN: fusing range finder and optical flow data in air
